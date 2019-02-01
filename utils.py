@@ -1,6 +1,7 @@
 import math
 import cryptoRandom
 import random
+import sys
 
 
 def egcd(a, b):
@@ -15,7 +16,7 @@ def modularInverse(n, p):
     # Modular inverse of n by modulo p
     m, k, g = egcd(n, p)
     if g != 1:
-        raise Exception("<ERROR in utils.modularInverse(): GCD(n, p) != 1>")
+        raise Exception("utils.modularInverse", "GCD(n, p) != 1")
     k = -k
     while m < 0:
         m += p
@@ -25,11 +26,11 @@ def modularInverse(n, p):
 
 def checkParamTypes(source, args, types):
     if len(args) != len(types):
-        raise Exception("<ERROR in {}: Wrong argument count>".format(source))
+        raiseException(source, "Wrong argument count")
     i = 0
     for arg, _types in zip(args, types):
         if type(arg) not in _types:
-            raise Exception("<ERROR in {}: Wrong argument {} type - expected {}, got {}>".format(source, i, ' or '.join(map(lambda x: x.__name__, _types)), type(arg)))
+            raiseException(source, "Wrong argument {} type - expected {}, got {}".format(i, ' or '.join(map(lambda x: x.__name__, _types)), type(arg)))
         i += 1
 
 
@@ -60,7 +61,7 @@ def isPrime(n, k=10):
 def randomPrime(minl, maxl):
     # TODO: Implement)
     if minl > maxl:
-        raise Exception("<ERROR in utils.randomPrime(): Minimal length must be less or equal to maximal length>")
+        raiseException("utils.randomPrime", "Minimal length must be less or equal to maximal length")
     _min, _max = 2 ** (max(0, minl - 1)), 2 ** (maxl)
     #p = customRandom.randOdd(_min, _max)
     p = random.randint(_min, _max) * 2 + 1
@@ -73,3 +74,10 @@ def randomPrime(minl, maxl):
 def int2bytes(n):
     return n.to_bytes(math.ceil(math.log(n, 256)), "big")
 
+
+def raiseException(source, text):
+    raise Exception("<ERROR in {}(): {}>".format(source, text))
+
+
+def showWarning(source, text):
+    print("<WARNING in {}(): {}>".format(source, text), file="")
