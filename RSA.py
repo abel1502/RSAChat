@@ -2,8 +2,9 @@ import utils
 import math
 import base64
 import os
+import config
 
-DEFAULT_E = 65537
+DEFAULT_E = config.getValue("RSA", "Default_E")
 
 
 class PublicKey:

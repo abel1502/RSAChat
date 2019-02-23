@@ -7,8 +7,9 @@ class Config:
     
     def Initialize(path="config/config.ini"):
         utils.checkParamTypes("config.Config.Initialize", [path], [{str}])
-        Config.parser = utils.openIni(path)
-        Config.path = path
+        if Config.path != path:
+            Config.parser = utils.openIni(path)
+            Config.path = path
     
     def getValue(section, key, default=None):
         utils.checkParamTypes("config.Config.getValue", [section, key], [{str}, {str}])
@@ -16,6 +17,8 @@ class Config:
             return Config.parser[section][key]
         except:
             return default
-    
+
 
 Config.Initialize()
+
+getValue = Config.getValue

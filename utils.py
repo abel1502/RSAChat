@@ -3,6 +3,7 @@ import cryptoRandom
 import random
 import sys
 import configparser
+import os
 
 
 def egcd(a, b):
@@ -85,15 +86,19 @@ def showWarning(source, text):
 
 
 def openIni(path):
-    if Config.path is None:
-        parser = configparser.ConfigParser()
-        if not (os.path.exists(path) and os.path.isfile(path)):
-            showWarning("utils.openIni", "Ini file missing")
-            if not os.path.exists(os.path.dirname(path)):
-                os.mkdir(os.path.dirname(path))
-            if os.path.exists(path) and not os.path.isfile(path):
-                raiseException("utils.openIni", "Ini config path points to a directory")
-            if not os.path.exists(path):
-                open(path, "w").close()
-        parser.read(path)
+    parser = configparser.ConfigParser()
+    if not (os.path.exists(path) and os.path.isfile(path)):
+        showWarning("utils.openIni", "Ini file missing")
+        if not os.path.exists(os.path.dirname(path)):
+            os.mkdir(os.path.dirname(path))
+        if os.path.exists(path) and not os.path.isfile(path):
+            raiseException("utils.openIni", "Ini config path points to a directory")
+        if not os.path.exists(path):
+            open(path, "w").close()
+    parser.read(path)
     return parser
+
+
+def startThread(target, args):
+    # TODO
+    pass
