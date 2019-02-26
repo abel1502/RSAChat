@@ -4,7 +4,7 @@ import base64
 import os
 import config
 
-DEFAULT_E = config.getValue("RSA", "Default_E")
+DEFAULT_E = int(config.getValue("RSA", "Default_E"))
 
 
 class PublicKey:
@@ -125,7 +125,6 @@ class PrivateKey:
 
 
 def genKeyPair(length=1024, custom_e=None):
-    # TODO: Implement)
     utils.checkParamTypes("RSA.genKeyPair", [length, custom_e], [{int}, {type(None), int}])
     if custom_e is None:
         e = DEFAULT_E

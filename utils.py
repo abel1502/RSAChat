@@ -4,6 +4,7 @@ import random
 import sys
 import configparser
 import os
+#import multiprocessing as mp
 
 
 def egcd(a, b):
@@ -61,7 +62,6 @@ def isPrime(n, k=10):
 
 
 def randomPrime(minl, maxl):
-    # TODO: Implement)
     if minl > maxl:
         raiseException("utils.randomPrime", "Minimal length must be less or equal to maximal length")
     _min, _max = 2 ** (max(0, minl - 1)), 2 ** (maxl)
@@ -99,6 +99,7 @@ def openIni(path):
     return parser
 
 
-def startThread(target, args):
-    # TODO
-    pass
+#def startThread(target, args):
+    #p = mp.Process(target=target, args=args)
+    #p.start()
+    #return p

@@ -2,9 +2,6 @@ __DEBUG__ = "test"
 
 
 def __test__():
-    import config
-    print(config.Config.getValue("Debug", "Value2"))
-    
     #import RSA
     #print(RSA.genKeyPair(2048)[1].dump())
     
