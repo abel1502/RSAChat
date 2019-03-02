@@ -4,7 +4,8 @@ import random
 import sys
 import configparser
 import os
-#import multiprocessing as mp
+import threading
+import time
 
 
 def egcd(a, b):
@@ -98,8 +99,22 @@ def openIni(path):
     parser.read(path)
     return parser
 
+def exit():
+    time.sleep(2)  # So that all threads can finish?...
 
-#def startThread(target, args):
-    #p = mp.Process(target=target, args=args)
-    #p.start()
-    #return p
+
+class Thread(threading.Thread):
+    """https://stackoverflow.com/questions/323972/is-there-any-way-to-kill-a-thread"""
+    def __init__(self, *args, **kwargs):
+        super(Thread, self).__init__(*args, **kwargs)
+        self._stop_event = threading.Event()
+    def stop(self):
+        self._stop_event.set()
+    def stopped(self):
+        return self._stop_event.is_set()
+
+
+def startThread(target, args=tuple()):
+    t = Thread(target=target, args=args)
+    t.start()
+    return t

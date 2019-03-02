@@ -2,6 +2,21 @@ __DEBUG__ = "test"
 
 
 def __test__():
+    import utils
+    import network
+    
+    cl = network.Client()
+    cl.connect("example.com", 80)
+    cl.startMain()
+    cl.send(b'GET / HTTP/1.1\r\nHost: example.com\r\n\r\n')
+    buf = b''
+    while len(buf) == 0:
+        buf += cl.recv()
+    print(buf)
+    cl.abort()
+    
+    utils.exit()
+    
     #import RSA
     #print(RSA.genKeyPair(2048)[1].dump())
     
