@@ -1,0 +1,34 @@
+def tmain():
+    import utils
+    import network
+    
+    cl = network.Client()
+    #cl.connect("example.com", 80)
+    cl.connect("localhost", 8888)
+    cl.startMain()
+    #cl._send(b'GET / HTTP/1.1\r\nHost: example.com\r\n\r\n')
+    #buf = cl._recv(400)
+    #print(buf.decode())
+    DATA = cl.recievePacket()
+    print(DATA.decode())
+    cl.abort()
+    
+    #import RSA
+    #print(RSA.genKeyPair(2048)[1].dump())
+    
+    #key = RSA.PrivateKey.load("#AbelRSA Private Key#WwozpqzV2giEfxCftmdC91Cj+/TbUkuTGw9a6dyFIMUtA/Oe6xyiKPlR3MeZWw==#AQAB#DlJuibwK8IACiBLPbVyVVf1LrSyht1UA2Rpgd7F3JkAtxxQlkBo0brKStsnMsQ==#")
+    #key = RSA.PrivateKey.load("#AbelRSA Private Key#Ae8fHQWV6v/d4KR9N7PwjCZHIwqbZXZGjKlDDn2nhsy44bB26CYAfi9p1R5UDHnoUwwGQXaTNLawvRHbBZGXJCNKR0gwTXHvkrt5Q6CU0airaByBAjZ3p0zfm0W1#AQAB#Admc54QKTksHEPYHmZsUhNuwvIJO95VWEwNuU5Q7BiUZbAnUavra9+5igHtn/hGgqzI1zChFoGnClhgSaYs9iqsHREHMj7o0AATE5zHeTSU3KOlh7OaiXL6m6kFB#")
+    
+    #key = RSA.PrivateKey.load("#AbelRSA Private Key#CHu2zkbyL3g1ERCCkXRDx7wk5SQVUy2QRk3YzbeCFOeGY7Vp1FUBV8vN1BnBMzX0V+xML9/CHEfAG0s4GcXv9p0aNJNgwywiRnr+AD6O8RDpW3002gpSxM0yWTbC3fA/2r45vfxVhZEZBXDlp1DJrHqKopcKz/KlsCxpiPIYr3iQ66CxxBaJRYCrc7Rja6ki7W2icaYvgH0pQUAlleRyVaEhLHHtdr93CgED+Xn8hKj5dPhMcmOWbSXOs0vxupTwx48lVeHfBYKiS5ShvCv+VCeLm6Wui0Ohga6qgJpU/BSkz3Usvsn3mPH3mc1V+RIsH4q7AVEJ3n3nx/6lC9sg2Ds=#AQAB#J0SB7FR6uUC0Y0kJGkITfXppTkK4c011h/jQl23ZtOoAKYqVVUgl70B0gla091fIszQZdYFMA5wcojqMdMDHA8Yyhyuru8OO5LBtDrSE9VpS1iu7eY5PkqpDZLMXUj3FVcUzgzmEpb//EjCE2vgaj0iscfC3G9sVGWh7Gm2J1rMiEq5neeAOUcCqrwD+cim5xnHEKLiifVsgRpV5AdyWosSP+iWakck+qeOlaeFcJ9gWpoZmlKycfGa2eA5K9rGMwnXoXNTDACsml/KDPlDybnL3Qt05HATcrDeFqZFk0A+f46hrtRIVzFznbLMQs6DtyAL+yPopd/oklywC6Nh50Q==#")
+    #print(RSA.getSessionKey(key.getPublicKey()))
+    
+    #print(key.n)
+    #print("~", len(str(key.n)) * 3.3)
+    #print(key.e)
+    #print(key.d)
+    #pub = key.getPublicKey()
+    #print(pub.dump())
+    #text = 'Test for AbelRSA crypto module.'
+    #m = pub.encrypt(text.encode())
+    #print(m)
+    #print(key.decrypt(m).decode())    

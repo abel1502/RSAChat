@@ -22,21 +22,32 @@ class Client:
     def abort(self):
         self.mainThread.stop()
         self.socket.close()
-    def send(self, msg):
+    def _send(self, msg):
         utils.checkParamTypes("network.Client.send", [msg], [{bytes}])
         self.sendQueue.append(msg)
-    def recv(self):
-        # TODO: parse packet; await packet completion
-        r = self.recvQueue[:10]
-        self.recvQueue = self.recvQueue[10:]
-        return r
+    def _popRecvQueue(self, length):
+        buf = self.recvQueue[:length]
+        self.recvQueue = self.recvQueue[length:]
+        return buf
+    def _recv(self, length):
+        # TODO: Timeout?
+        buf = b''
+        while len(buf) < length:
+            if len(self.recvQueue) > 0:
+                buf += self._popRecvQueue(min(length - len(buf), len(self.recvQueue)))
+        return buf
+    def recievePacket(self):
+        # TODO: parse packet; await packet completion; decypher packet
+        ESIZE = int.from_bytes(self._recv(2), "big")
+        EDATA = self._recv(ESIZE)
+        return EDATA
     def mainLoop(self):
         while not self.mainThread.stopped():
             # Recieve what you can
             # TODO: Except broken pipes
             while True:
                 try:
-                    #self.recvQueue.append(self.socket.recv(PSIZE))
+                    #self.recvQueue.append(self.socket.recv(PACKET_SIZE))
                     self.recvQueue += self.socket.recv(PACKET_SIZE)
                 except: #socket.timeout:
                     break
