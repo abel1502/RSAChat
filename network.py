@@ -38,9 +38,10 @@ class Client:
         return buf
     def recievePacket(self):
         # TODO: parse packet; await packet completion; decypher packet
-        ESIZE = int.from_bytes(self._recv(2), "big")
-        EDATA = self._recv(ESIZE)
-        return EDATA
+        EPID = int.from_bytes(self._recv(1), "big")
+        EPSIZE = int.from_bytes(self._recv(2), "big")
+        EPDATA = self._recv(ESIZE)
+        return EPID, EPDATA
     def mainLoop(self):
         while not self.mainThread.stopped():
             # Recieve what you can
