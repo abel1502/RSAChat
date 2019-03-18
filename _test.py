@@ -3,14 +3,11 @@ def tmain():
     import network
     
     cl = network.Client()
-    #cl.connect("example.com", 80)
-    cl.connect("localhost", 8888)
+    cl.connect("localhost", 8887)
     cl.startMain()
-    #cl._send(b'GET / HTTP/1.1\r\nHost: example.com\r\n\r\n')
-    #buf = cl._recv(400)
-    #print(buf.decode())
-    DATA = cl.recievePacket()
-    print(DATA.decode())
+    EPID, EPDATA = cl.recievePacket()
+    print(EPID)
+    print(EPDATA.decode())
     cl.abort()
     
     #import RSA

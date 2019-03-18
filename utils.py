@@ -33,7 +33,7 @@ def checkParamTypes(source, args, types):
         raiseException(source, "Wrong argument count")
     i = 0
     for arg, _types in zip(args, types):
-        if type(arg) not in _types:
+        if not isinstance(arg, tuple(_types)):
             raiseException(source, "Wrong argument {} type - expected {}, got {}".format(i, ' or '.join(map(lambda x: x.__name__, _types)), type(arg)))
         i += 1
 
@@ -83,7 +83,7 @@ def raiseException(source, text):
 
 
 def showWarning(source, text):
-    print("<WARNING in {}(): {}>".format(source, text), file="")
+    print("<WARNING in {}(): {}>".format(source, text), file=sys.stderr)
 
 
 def openIni(path):

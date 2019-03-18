@@ -9,8 +9,6 @@ def __main__():
 
 
 if __DEBUG__ == "test":
-    import sys
-    sys.path.append("./test")
     import _test
     _test.tmain()
 elif __name__ == "__main__":
