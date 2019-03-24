@@ -1,6 +1,6 @@
 import socket, socketserver
-import utils
-import config
+from . import utils
+from . import config
 from collections import deque
 
 PACKET_SIZE = int(config.getValue("Network", "Packet_Size", "4096"))
@@ -9,7 +9,7 @@ PACKET_SIZE = int(config.getValue("Network", "Packet_Size", "4096"))
 class Client:
     def __init__(self):
         self.socket = socket.socket()
-        self.socket.settimeout(int(config.getValue("Network", "Timeout", "300")) / 1000)
+        self.socket.settimeout(int(config.getValue("Network", "Timeout", "2000")) / 1000)
         self.sendQueue = deque()
         self.recvQueue = b'' #deque()
         self.mainThread = None
@@ -63,7 +63,7 @@ class Client:
 class Server:
     def __init__(self):
         self.socket = socket.socket()
-        self.socket.settimeout(int(config.getValue("Network", "Timeout", "300")) / 1000)
+        self.socket.settimeout(int(config.getValue("Network", "Timeout", "2000")) / 1000)
         self.clients = dict()
         self.mainThread = None
     def listen(self, addr="", port=-1):
@@ -82,7 +82,7 @@ class Server:
         utils.checkParamTypes("network.Server.createClientThread", [addr, cl], [{str}, {socket.socket}])
         client = Client()
         client.socket = cl
-        client.socket.settimeout(int(config.getValue("Network", "Timeout", "300")) / 1000)
+        client.socket.settimeout(int(config.getValue("Network", "Timeout", "2000")) / 1000)
         client.startMain()
         return client
     def mainLoop(self):
@@ -95,4 +95,5 @@ class Server:
                 else:
                     self.clients[addr] = wrapClientObject(cl)
             except:
+                print('.')
                 pass

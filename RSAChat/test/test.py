@@ -1,6 +1,6 @@
 def tmain():
-    import utils
-    import network
+    from .. import utils
+    from .. import network
     
     cl = network.Client()
     cl.connect("localhost", 8887)
@@ -10,7 +10,7 @@ def tmain():
     print(EPDATA.decode())
     cl.abort()
     
-    #import RSA
+    #from .. import RSA
     #print(RSA.genKeyPair(2048)[1].dump())
     
     #key = RSA.PrivateKey.load("#AbelRSA Private Key#WwozpqzV2giEfxCftmdC91Cj+/TbUkuTGw9a6dyFIMUtA/Oe6xyiKPlR3MeZWw==#AQAB#DlJuibwK8IACiBLPbVyVVf1LrSyht1UA2Rpgd7F3JkAtxxQlkBo0brKStsnMsQ==#")

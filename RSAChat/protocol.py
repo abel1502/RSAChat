@@ -1,4 +1,4 @@
-import utils
+from . import utils
 from enum import Enum
 
 class EPACKET_TYPE(Enum):

@@ -1,8 +1,8 @@
-import utils
-import math
+from . import utils
+from . import math
 import base64
 import os
-import config
+from . import config
 
 DEFAULT_E = int(config.getValue("RSA", "Default_E", "65537"))
 

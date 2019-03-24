@@ -1,5 +1,5 @@
 import math
-import cryptoRandom
+from . import cryptoRandom
 import random
 import sys
 import configparser

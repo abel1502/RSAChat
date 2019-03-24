@@ -1,5 +1,5 @@
-import utils
-import config
+from . import utils
+from . import config
 
 
 class Strings:
