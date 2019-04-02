@@ -1,5 +1,5 @@
 from . import utils
-__DEBUG__ = "test"
+__DEBUG__ = ("test", 1)
 
 
 def main():
@@ -7,10 +7,12 @@ def main():
     utils.exit()
 
 
-if __DEBUG__ == "test":
-    from .test import test
-    test.tmain()
-    #from .test import test2
-    #test2.tmain()
+if __DEBUG__[0] == "test":
+    if __DEBUG__[1] == 1:
+        from .test import test
+        test.tmain()
+    elif __DEBUG__[1] == 2:
+        from .test import test2
+        test2.tmain()
 else:
     main()
