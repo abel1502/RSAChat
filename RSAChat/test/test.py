@@ -1,14 +1,17 @@
 def tmain():
     from .. import utils
     from .. import network
+    import time
     
-    cl = network.Client()
-    cl.connect("localhost", 8887)
-    cl.startMain()
-    EPID, EPDATA = cl.recievePacket()
-    print(EPID)
-    print(EPDATA.decode())
-    cl.abort()
+    #cl = network.Client()
+    #cl.connect("localhost", 8887)
+    #cl.startMain()
+    #time.sleep(10)
+    #EPID, EPDATA = cl.recievePacket()
+    #print(EPID)
+    #print(EPDATA.decode())
+    #cl.abort()
+    utils.exit()
     
     #from .. import RSA
     #print(RSA.genKeyPair(2048)[1].dump())
