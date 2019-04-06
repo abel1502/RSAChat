@@ -1,7 +1,25 @@
 def tmain():
     from .. import utils
     from .. import network
+    from .. import protocol
     import time
+    
+    network.Client("localhost", port=8889)
+    network.CLIENT.start()
+    #time.sleep(2)
+    p = protocol.EPACKET(1, 0, b'Hello there!')
+    p.setEPLEN()
+    #time.sleep(2)
+    network.CLIENT.aioClient[1].transport.write(p.encode())
+    #time.sleep(2)
+    network.CLIENT.abort()
+    
+    #cl = network.Client("localhost", 8889)
+    #cl.start()
+    #time.sleep(10)
+    #data = cl.recv(20)
+    #print(data)
+    #cl.close()
     
     #cl = network.Client()
     #cl.connect("localhost", 8887)

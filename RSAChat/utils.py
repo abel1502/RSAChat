@@ -118,3 +118,7 @@ def startThread(target, args=tuple()):
     t = Thread(target=target, args=args)
     t.start()
     return t
+
+
+def popBuf(buf, length):
+    return buf[length:], buf[:length]

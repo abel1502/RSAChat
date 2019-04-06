@@ -4,78 +4,197 @@ from . import config
 from collections import deque
 import time
 import asyncio
+from . import protocol
 
 PACKET_SIZE = int(config.getValue("Network", "Packet_Size", "4096"))
 SERVER = None
-
-
-def addClientToServer(cl):
-    if SERVER is not None:
-        SERVER.clients.append(cl)
-
-
-def startServer(host="", port=8887):
-    SERVER = Server(host, port)
-    SERVER.start()
+CLIENT = None
+CLIENT_PROTOCOL = None
 
 
 class Server:
     def __init__(self, host="", port=8887):
         self.eventLoop = asyncio.get_event_loop()
-        coro = self.eventLoop.create_server(ServerClientProtocol, host, port)
+        coro = self.eventLoop.create_server(ServerProtocol, host, port)
         self.aioServer = self.eventLoop.run_until_complete(coro)
-        self.mainThread = None
-        self.clients = []  # Dict?....
+        self.protocol = None
+        global SERVER
+        SERVER = self
     def start(self):
-        self.mainThread = utils.startThread(self.eventLoop.run_forever)
+        utils.startThread(self.eventLoop.run_forever)
     def abort(self):
-        # TODO: Close clients
+        self.eventLoop.call_soon_threadsafe(self.eventLoop.stop)
         self.aioServer.close()
-        self.eventLoop.stop()
-        self.eventLoop.close()
-
+        self.eventLoop.call_soon_threadsafe(self.eventLoop.close)
+        global SERVER
+        SERVER = None
 
 class ServerProtocol(asyncio.Protocol):
-    def send(self, data):
-        self.transport.write(data)
-    def recv(self, length):
-        buf = self.recvBuf[:length]
-        self.recvBuf = self.recvBuf[length:]
-        return buf
     def connection_made(self, transport):
-        peername = transport.get_extra_info('peername')
-        #print('Connection from {}'.format(peername))
         self.transport = transport
-        addClientToServer(self)
         self.recvBuf = b''
+        self.curPacket = protocol.EPACKET()
+        self.packets = deque()
+        global SERVER
+        SERVER.protocol = self
+        self.mainThread = utils.Thread(target=self.handlePackets)
+        self.mainThread.start()
+    def handlePackets(self):
+        while not self.mainThread.stopped():
+            #print('.1', list(self.packets))
+            if len(self.packets) > 0:
+                self.handleSinglePacket(self.packets.popleft())
+            time.sleep(0.5)
+    def handleSinglePacket(self, packet):
+        # TODO: Implement
+        print(packet.EPID, packet.EPLEN, packet.EPDATA)
     def data_received(self, data):
+        #print('[*]', data)
         self.recvBuf += data
+        self.recvBuf, success = self.curPacket.parse(self.recvBuf)
+        while success:
+            self.packets.append(self.curPacket)
+            self.curPacket = protocol.EPACKET()
+            self.recvBuf, success = self.curPacket.parse(self.recvBuf)
+    def connection_lost(self, exc):
+        self.mainThread.stop()
+        self.transport.close()
 
 
-def startClient(host, port=8887):
-    loop = asyncio.get_event_loop()
-    coro = loop.create_connection(lambda: ClientProtocol(loop), host, port)
-    client = loop.run_until_complete(coro)
-    mainThread = utils.startThread(loop.run_forever)
-    return loop, client, mainThread
+class Client:
+    def __init__(self, host, port=8887):
+        global CLIENT
+        CLIENT = self
+        self.eventLoop = asyncio.get_event_loop()
+        coro = self.eventLoop.create_connection(ClientProtocol, host, port)
+        self.aioClient = self.eventLoop.run_until_complete(coro)
+        self.protocol = None
+    def start(self):
+        utils.startThread(self.eventLoop.run_forever)
+    def abort(self):
+        self.eventLoop.call_soon_threadsafe(self.eventLoop.stop)
+        # It works for shutdown... I guess)
+        self.aioClient[1].connection_lost(None)
+        self.aioClient[0].close()
+        self.eventLoop.call_soon_threadsafe(self.eventLoop)
+        time.sleep(1)
+        global CLIENT
+        CLIENT = None
 
 
 class ClientProtocol(asyncio.Protocol):
-    def __init__(self, loop):
-        self.loop = loop
-    def send(self, data):
-        self.transport.write(data)
-    def recv(self, length):
-        buf = self.recvBuf[:length]
-        self.recvBuf = self.recvBuf[length:]
-        return buf    
     def connection_made(self, transport):
         self.transport = transport
         self.recvBuf = b''
+        self.curPacket = protocol.EPACKET()
+        self.packets = deque()
+        # The first doesn't work, for some reason
+        #global CLIENT
+        #CLIENT.protocol = self
+        #global CLIENT_PROTOCOL
+        #CLIENT_PROTOCOL = self
+        self.mainThread = utils.Thread(target=self.handlePackets)
+        self.mainThread.start()
+    def handlePackets(self):
+        while not self.mainThread.stopped():
+            print('.1')
+            if len(self.packets) > 0:
+                self.handleSinglePacket(self.packets.popleft())
+            time.sleep(0.5)
+    def handleSinglePacket(self, packet):
+        # TODO: Implement
+        print(packet.EPID, packet.EPLEN, packet.EPDATA)
     def data_received(self, data):
+        print('[*]', data)
         self.recvBuf += data
+        self.recvBuf, success = self.curPacket.parse(self.recvBuf)
+        while success:
+            self.packets.append(self.curPacket)
+            self.curPacket = protocol.EPACKET()
+            self.recvBuf, success = self.curPacket.parse(self.recvBuf)
     def connection_lost(self, exc):
-        self.loop.stop()
+        self.mainThread.stop()
+        self.transport.close()
+
+
+#def addClientToServer(cl):
+    #if SERVER is not None:
+        #SERVER.clients.append(cl)
+
+
+#def startServer(host="", port=8887):
+    #SERVER = Server(host, port)
+    #SERVER.start()
+
+
+#class Server:
+    #def __init__(self, host="", port=8887):
+        #self.eventLoop = asyncio.get_event_loop()
+        #coro = self.eventLoop.create_server(ServerProtocol, host, port)
+        #self.aioServer = self.eventLoop.run_until_complete(coro)
+        #self.clients = []  # Dict?....
+    #def start(self):
+        #utils.startThread(self.eventLoop.run_forever)
+    #def abort(self):
+        ## TODO: Close clients
+        #self.aioServer.close()
+        #self.eventLoop.stop()
+        #self.eventLoop.close()
+
+
+#class ServerProtocol(asyncio.Protocol):
+    #def send(self, data):
+        #self.transport.write(data)
+    #def recv(self, length):
+        #buf = self.recvBuf[:length]
+        #self.recvBuf = self.recvBuf[length:]
+        #return buf
+    #def connection_made(self, transport):
+        #peername = transport.get_extra_info('peername')
+        ##print('Connection from {}'.format(peername))
+        #self.transport = transport
+        #addClientToServer(self)
+        #self.recvBuf = b''
+    #def data_received(self, data):
+        #self.recvBuf += data
+
+
+#class Client:
+    #def __init__(self, host, port=8887):
+        #self.eventLoop = asyncio.get_event_loop()
+        #coro = self.eventLoop.create_connection(lambda: ClientProtocol(self.eventLoop), host, port)
+        #self.aioClient = self.eventLoop.run_until_complete(coro)
+    #def send(self, data):
+        #self.aioClient.send(data)
+    #def recv(self, length):
+        #return self.aioClient.recv(length)
+    #def start(self):
+        #utils.startThread(self.eventLoop.run_forever)
+    #def abort(self):
+        #self.aioClient.close()
+        #self.eventLoop.stop()
+        #self.eventLoop.close()    
+
+
+#class ClientProtocol(asyncio.Protocol):
+    #def __init__(self, loop):
+        #self.loop = loop
+    #def send(self, data):
+        #self.transport.write(data)
+    #def recv(self, length):
+        #buf = self.recvBuf[:length]
+        #self.recvBuf = self.recvBuf[length:]
+        #return buf
+    #def close(self):
+        #self.transport.close()
+        #self.loop.stop()
+    #def connection_made(self, transport):
+        #self.transport = transport
+        #self.recvBuf = b''
+    #def data_received(self, data):
+        #self.recvBuf += data
+    #def connection_lost(self, exc):
+        #self.loop.stop()
 
 
 #class Client:
