@@ -7,7 +7,7 @@ def tmain():
     network.Client("localhost", port=8889)
     network.CLIENT.start()
     #time.sleep(2)
-    p = protocol.EPACKET(1, 0, b'Hello there!')
+    p = protocol.EPACKET(6, 0, b'Hello there!')
     p.setEPLEN()
     #time.sleep(2)
     network.CLIENT.aioClient[1].transport.write(p.encode())

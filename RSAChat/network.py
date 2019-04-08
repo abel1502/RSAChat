@@ -9,7 +9,7 @@ from . import protocol
 PACKET_SIZE = int(config.getValue("Network", "Packet_Size", "4096"))
 SERVER = None
 CLIENT = None
-CLIENT_PROTOCOL = None
+SENDBUF = {} # Public key -> send packet queue
 
 
 class Server:
@@ -17,7 +17,7 @@ class Server:
         self.eventLoop = asyncio.get_event_loop()
         coro = self.eventLoop.create_server(ServerProtocol, host, port)
         self.aioServer = self.eventLoop.run_until_complete(coro)
-        self.protocol = None
+        self.clients = []
         global SERVER
         SERVER = self
     def start(self):
@@ -31,14 +31,18 @@ class Server:
 
 class ServerProtocol(asyncio.Protocol):
     def connection_made(self, transport):
+        print("Someone connected")
         self.transport = transport
         self.recvBuf = b''
         self.curPacket = protocol.EPACKET()
         self.packets = deque()
         global SERVER
-        SERVER.protocol = self
+        SERVER.clients.append(self)
         self.mainThread = utils.Thread(target=self.handlePackets)
         self.mainThread.start()
+        #self.stage = 0 # 0, 1,  - handshake
+        self.clPublicKey = None
+        self.clPublicKeyVerified = False
     def handlePackets(self):
         while not self.mainThread.stopped():
             #print('.1', list(self.packets))
@@ -47,7 +51,24 @@ class ServerProtocol(asyncio.Protocol):
             time.sleep(0.5)
     def handleSinglePacket(self, packet):
         # TODO: Implement
-        print(packet.EPID, packet.EPLEN, packet.EPDATA)
+        print("[*]", packet.EPID, packet.EPLEN, packet.EPDATA)
+        if self.clPublicKey is None:
+            if packet.EPID == protocol.EPACKET.HSH_CL_ASK:
+                pass
+            elif packet.EPID == protocol.EPACKET.HSH_CL_SIMPLE:
+                pass
+            else:
+                # TODO: Quit this guy!
+                self.connection_lost()
+        elif not self.clPublicKeyVerified:
+            if packet.EPID == protocol.EPACKET.HSH_VER_ANS:
+                pass
+            else:
+                # TODO: Quit this guy!
+                self.connection_lost()
+        else:
+            # TODO: Normal packet handling
+            pass
     def data_received(self, data):
         #print('[*]', data)
         self.recvBuf += data

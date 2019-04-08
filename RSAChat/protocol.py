@@ -4,7 +4,13 @@ import struct
 
 
 class EPACKET_TYPE(Enum):
-    pass
+    HSH_CL_ASK = 1
+    HSH_SRV_ANS = 2
+    HSH_CL_SIMPLE = 3
+    HSH_VER_ASK = 4
+    HSH_VER_ANS = 5
+    NORM_PLAIN = 6 # Why the hell?
+    NORM_RSA = 7
 
 
 class EPACKET:
