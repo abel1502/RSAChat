@@ -18,6 +18,8 @@ class EPACKET:
         self.EPID = EPID
         self.EPLEN = EPLEN
         self.EPDATA = EPDATA
+        if self.EPLEN is not None:
+            self.setEPLEN()
     def setEPLEN(self):
         self.EPLEN = len(self.EPDATA)
     def parse(self, data):

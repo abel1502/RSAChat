@@ -5,6 +5,7 @@ from collections import deque
 import time
 import asyncio
 from . import protocol
+from . import RSA
 
 PACKET_SIZE = int(config.getValue("Network", "Packet_Size", "4096"))
 SERVER = None
@@ -13,11 +14,12 @@ SENDBUF = {} # Public key -> send packet queue
 
 
 class Server:
-    def __init__(self, host="", port=8887):
+    def __init__(self, host="", port=8887, privKey=None):
         self.eventLoop = asyncio.get_event_loop()
         coro = self.eventLoop.create_server(ServerProtocol, host, port)
         self.aioServer = self.eventLoop.run_until_complete(coro)
         self.clients = []
+        self.privKey = privKey if privKey is not None else RSA.genKeyPair()[1]
         global SERVER
         SERVER = self
     def start(self):
@@ -43,6 +45,9 @@ class ServerProtocol(asyncio.Protocol):
         #self.stage = 0 # 0, 1,  - handshake
         self.clPublicKey = None
         self.clPublicKeyVerified = False
+    def sendPacket(self, packet):
+        # TODO: Temporary?
+        pass
     def handlePackets(self):
         while not self.mainThread.stopped():
             #print('.1', list(self.packets))
@@ -52,16 +57,19 @@ class ServerProtocol(asyncio.Protocol):
     def handleSinglePacket(self, packet):
         # TODO: Implement
         print("[*]", packet.EPID, packet.EPLEN, packet.EPDATA)
+        global SERVER
         if self.clPublicKey is None:
-            if packet.EPID == protocol.EPACKET.HSH_CL_ASK:
-                pass
-            elif packet.EPID == protocol.EPACKET.HSH_CL_SIMPLE:
-                pass
+            if packet.EPID == protocol.EPACKET_TYPE.HSH_CL_ASK:
+                # TODO: Verify
+                self.clPublicKey = RSA.PublicKey.load(packet.EPDATA.decode())
+                self.sendPacket(protocol.EPACKET(protocol.EPACKET_TYPE.HSH_SRV_ANS, -1, self.clPublicKey.encrypt(SERVER.privKey.getPublicKey.dump())))
+            elif packet.EPID == protocol.EPACKET_TYPE.HSH_CL_SIMPLE:
+                self.clPublicKey = RSA.PublicKey.load(self.PrivateKey.decrypt(packet.EPDATA))
             else:
                 # TODO: Quit this guy!
                 self.connection_lost()
         elif not self.clPublicKeyVerified:
-            if packet.EPID == protocol.EPACKET.HSH_VER_ANS:
+            if packet.EPID == protocol.EPACKET_TYPE.HSH_VER_ANS:
                 pass
             else:
                 # TODO: Quit this guy!
