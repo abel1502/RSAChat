@@ -144,7 +144,7 @@ def genKeyPair(length=1024, custom_e=None):
     return (PublicKey(n, e), PrivateKey(n, e, d))
 
 
-def getSessionKey(clientPublicKey, length=256):
-    utils.checkParamTypes("RSA.genSessionKey", [clientPublicKey, length], [{PublicKey}, {int}])
-    plainKey = os.urandom(length)
-    return plainKey, clientPublicKey.encrypt(plainKey)
+#def getSessionKey(clientPublicKey, length=256):
+    #utils.checkParamTypes("RSA.genSessionKey", [clientPublicKey, length], [{PublicKey}, {int}])
+    #plainKey = os.urandom(length)
+    #return plainKey, clientPublicKey.encrypt(plainKey)

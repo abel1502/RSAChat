@@ -64,6 +64,7 @@ class ServerProtocol(asyncio.Protocol):
                 self.clPublicKey = RSA.PublicKey.load(packet.EPDATA.decode())
                 self.sendPacket(protocol.EPACKET(protocol.EPACKET_TYPE.HSH_SRV_ANS, -1, self.clPublicKey.encrypt(SERVER.privKey.getPublicKey.dump())))
             elif packet.EPID == protocol.EPACKET_TYPE.HSH_CL_SIMPLE:
+                # TODO: Verify again
                 self.clPublicKey = RSA.PublicKey.load(self.PrivateKey.decrypt(packet.EPDATA))
             else:
                 # TODO: Quit this guy!

@@ -27,8 +27,8 @@ class EPACKET:
             data, tmp = utils.popBuf(data, 1)
             self.EPID = int.from_bytes(tmp, "big")
         if self.EPID is not None:
-            if self.EPLEN is None and len(data) >= 2:
-                data, tmp = utils.popBuf(data, 2)
+            if self.EPLEN is None and len(data) >= 3:
+                data, tmp = utils.popBuf(data, 3)
                 self.EPLEN = int.from_bytes(tmp, "big")
             if self.EPLEN is not None:
                 if len(self.EPDATA) < self.EPLEN:
