@@ -68,7 +68,7 @@ class ServerProtocol(asyncio.Protocol):
             elif packet.EPID == protocol.EPACKET_TYPE.HSH_CL_SIMPLE:
                 # TODO: Verify again
                 self.clPublicKey = RSA.PublicKey.load(SERVER.privKey.decrypt(packet.EPDATA).decode())
-                self.challenge = random.randint(0, 256 ** 16).to_bytes(16, "big")
+                self.challenge = utils.randomBytes(16)
                 self.sendPacket(protocol.EPACKET(protocol.EPACKET_TYPE.HSH_VER_ASK, -1, self.clPublicKey.encrypt(self.challenge)))
             else:
                 # TODO: Quit this guy!
@@ -77,7 +77,7 @@ class ServerProtocol(asyncio.Protocol):
             if packet.EPID == protocol.EPACKET_TYPE.HSH_VER_ANS:
                 # TODO: And again
                 if hashlib.sha256(self.challenge).digest() == SERVER.privKey.decrypt(packet.EPDATA):
-                    pass
+                    self.clPublicKeyVerified = True
                 else:
                     # TODO: Quit this guy!
                     self.connection_lost()
@@ -86,7 +86,9 @@ class ServerProtocol(asyncio.Protocol):
                 self.connection_lost()
         else:
             # TODO: Normal packet handling
-            pass
+            self.handleSPacket(protocol.SPACKET.parse(SERVER.privKey.decrypt(packet.EPDATA)))
+    def handleSPacket(self, packet):
+        pass
     def data_received(self, data):
         #print('[*]', data)
         self.recvBuf += data

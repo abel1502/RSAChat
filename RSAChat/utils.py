@@ -122,3 +122,7 @@ def startThread(target, args=tuple()):
 
 def popBuf(buf, length):
     return buf[length:], buf[:length]
+
+
+def randomBytes(length):
+    return random.randint(0, 256 ** length).to_bytes(length, "big")
