@@ -1,3 +1,5 @@
+# TODO: Int mustn't be encrypted!
+
 from . import utils
 from . import math
 import base64
@@ -26,15 +28,24 @@ class PublicKey:
         #    msg = bytes([0] * (blockLen - len(msg) % blockLen)) + msg
         encrypted = 0
         #for i in range(0, len(msg), blockLen):
+        blockSize = self.n // 65536
+        blockLen = math.ceil(math.log(blockSize, 256))
         while msg > 0:
-            encrypted = encrypted * self.n + self._encryptBlock(msg % self.n)
-            msg //= self.n
+            encrypted = encrypted * blockSize + self._encryptBlock((msg % blockSize).to_bytes(blockLen, "big"))
+            msg //= blockSize
         return utils.int2bytes(encrypted)
     
+    def verify(self, signature):
+        utils.checkParamTypes("RSA.PublicKey._encryptBlock", [msg], [{bytes}])
+        msg = int.from_bytes(msg, "big")
+        if msg >= self.n:
+            utils.raiseException("RSA.PublicKey._encryptBlock", "Message must be less than N")
+        return utils.int2bytes(pow(msg, self.e, self.n))[1:]
+    
     def _encryptBlock(self, msg):
-        utils.checkParamTypes("RSA.PublicKey._encryptBlock", [msg], [{int, bytes}])
-        if type(msg) == bytes:
-            msg = int.from_bytes(msg, "big")
+        utils.checkParamTypes("RSA.PublicKey._encryptBlock", [msg], [{bytes}])
+        msg = b"\xff" + msg
+        msg = int.from_bytes(msg, "big")
         if msg >= self.n:
             utils.raiseException("RSA.PublicKey._encryptBlock", "Message must be less than N")
         return pow(msg, self.e, self.n)
@@ -67,17 +78,16 @@ class PrivateKey:
         self.d = d
     
     def _decryptBlock(self, msg):
-        utils.checkParamTypes("RSA.PrivateKey._decryptBlock", [msg], [{int, bytes}])
-        if type(msg) == bytes:
-            msg = int.from_bytes(msg, "big")
+        utils.checkParamTypes("RSA.PrivateKey._decryptBlock", [msg], [{bytes}])
+        msg = int.from_bytes(msg, "big")
         if msg >= self.n:
             utils.raiseException("RSA.PrivateKey._decryptBlock", "Message must be less than N")
-        return pow(msg, self.d, self.n)
+        return utils.int2bytes(pow(msg, self.d, self.n))[1:]
     
     def decrypt(self, msg):
         #if blockLen is None:
         #    blockLen = int(math.log(self.n, 256))
-        utils.checkParamTypes("RSA.PrivateKey.decrypt", [msg], [{int, bytes}])
+        utils.checkParamTypes("RSA.PrivateKey.decrypt", [msg], [{bytes}])
         #blockSize = 256 ** blockLen
         #if blockSize >= self.n:
         #    utils.raiseException("RSA.PrivateKey.decrypt", "Each block must be less than N")
@@ -87,15 +97,17 @@ class PrivateKey:
         #    msg = bytes([0] * (blockLen - len(msg) % blockLen)) + msg
         decrypted = 0
         #for i in range(0, len(msg), blockLen):
+        blockSize = n // 65536
+        blockLen = math.ceil(math.log(blockSize, 2))
         while msg > 0:
-            decrypted = decrypted * self.n + self._decryptBlock(msg % self.n)
-            msg //= self.n
+            decrypted = decrypted * blockSize + self._decryptBlock((msg % blockSize).to_bytes(blockLen, "big"))
+            msg //= blockSize
         return utils.int2bytes(decrypted)
     
     def sign(self, msg):
-        utils.checkParamTypes("RSA.PrivateKey.sign", [msg], [{int, bytes}])
-        if type(msg) == bytes:
-            msg = int.from_bytes(msg, "big")
+        utils.checkParamTypes("RSA.PrivateKey.sign", [msg], [{bytes}])
+        msg = b"\xff" + msg
+        msg = int.from_bytes(msg, "big")
         if msg >= self.n:
             utils.raiseException("RSA.PrivateKey.sign", "Message must be less than N")
         return pow(msg, self.d, self.n)

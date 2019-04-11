@@ -6,6 +6,8 @@ import time
 import asyncio
 from . import protocol
 from . import RSA
+from . import cryptoRandom
+import hashlib
 
 PACKET_SIZE = int(config.getValue("Network", "Packet_Size", "4096"))
 SERVER = None
@@ -65,13 +67,20 @@ class ServerProtocol(asyncio.Protocol):
                 self.sendPacket(protocol.EPACKET(protocol.EPACKET_TYPE.HSH_SRV_ANS, -1, self.clPublicKey.encrypt(SERVER.privKey.getPublicKey.dump())))
             elif packet.EPID == protocol.EPACKET_TYPE.HSH_CL_SIMPLE:
                 # TODO: Verify again
-                self.clPublicKey = RSA.PublicKey.load(self.PrivateKey.decrypt(packet.EPDATA))
+                self.clPublicKey = RSA.PublicKey.load(SERVER.privKey.decrypt(packet.EPDATA).decode())
+                self.challenge = random.randint(0, 256 ** 16).to_bytes(16, "big")
+                self.sendPacket(protocol.EPACKET(protocol.EPACKET_TYPE.HSH_VER_ASK, -1, self.clPublicKey.encrypt(self.challenge)))
             else:
                 # TODO: Quit this guy!
                 self.connection_lost()
         elif not self.clPublicKeyVerified:
             if packet.EPID == protocol.EPACKET_TYPE.HSH_VER_ANS:
-                pass
+                # TODO: And again
+                if hashlib.sha256(self.challenge).digest() == SERVER.privKey.decrypt(packet.EPDATA):
+                    pass
+                else:
+                    # TODO: Quit this guy!
+                    self.connection_lost()
             else:
                 # TODO: Quit this guy!
                 self.connection_lost()

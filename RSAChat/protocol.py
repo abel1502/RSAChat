@@ -42,3 +42,38 @@ class EPACKET:
     def encode(self):
         assert self.isComplete()
         return self.EPID.to_bytes(1, "big") + self.EPLEN.to_bytes(2, "big") + self.EPDATA
+    def extractSPACKET(self, key):
+        assert self.isComplete()
+        return SPACKET.parse(key.decrypt(self.EPDATA))
+
+
+class SPACKET:
+    def __init__(self, SPDATA, SPKEY):
+        self.SPDATA = SPDATA
+        self.SPKEY = SPKEY
+        self.setLen()
+    
+    def setLen(self):
+        self.SPLEN = len(SPDATA)
+        self.SPKEYLEN = len(SPKEY)
+    
+    def isComplete(self):
+        return self.SPDATA is not None and self.SPKEY is not None
+    
+    @staticmethod
+    def parse(data):
+        # TODO: FINISH
+        SPLEN = int.from_bytes(data[:2], "big")
+        data = data[2:]
+        assert len(data) - 2 < SPLEN
+        SPDATA = data[:SPLEN]
+        data = data[SPLEN:]
+        SPLEN = int.from_bytes(data[:2], "big")
+        data = data[2:]
+        assert len(data) - 2 < SPLEN
+        SPDATA = data[:SPLEN]
+        data = data[SPLEN:]
+            
+
+
+
