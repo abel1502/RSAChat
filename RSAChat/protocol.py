@@ -47,36 +47,99 @@ class EPACKET:
         return SPACKET.parse(key.decrypt(self.EPDATA))
 
 
-class SPACKET:
-    def __init__(self, SPDATA, SPKEY):
-        self.SPDATA = SPDATA
-        self.SPKEY = SPKEY
-        self.setLen()
+#class SPACKET:
+    #def __init__(self, SPDATA, SPKEY):
+        #self.SPDATA = SPDATA
+        #self.SPKEY = SPKEY
+        #self.setLen()
     
-    def setLen(self):
-        self.SPLEN = len(SPDATA)
-        self.SPKEYLEN = len(SPKEY)
+    #def setLen(self):
+        #self.SPLEN = len(SPDATA)
+        #self.SPKEYLEN = len(SPKEY)
     
-    def isComplete(self):
-        return self.SPDATA is not None and self.SPKEY is not None
+    #def isComplete(self):
+        #return self.SPDATA is not None and self.SPKEY is not None
     
-    @staticmethod
-    def parse(data):
-        # TODO: FINISH
-        SPLEN = int.from_bytes(data[:2], "big")
-        data = data[2:]
-        assert len(data) - 2 >= SPLEN
-        SPDATA = data[:SPLEN]
-        data = data[SPLEN:]
-        SPKEYLEN = int.from_bytes(data[:2], "big")
-        data = data[2:]
-        assert len(data) == SPKEYLEN
-        SPKEY = data
-        return SPACKET(SPDATA, SPKEY)
+    #@staticmethod
+    #def parse(data):
+        ## TODO: FINISH
+        #SPLEN = int.from_bytes(data[:2], "big")
+        #data = data[2:]
+        #assert len(data) - 2 >= SPLEN
+        #SPDATA = data[:SPLEN]
+        #data = data[SPLEN:]
+        #SPKEYLEN = int.from_bytes(data[:2], "big")
+        #data = data[2:]
+        #assert len(data) == SPKEYLEN
+        #SPKEY = data
+        #return SPACKET(SPDATA, SPKEY)
 
-    def encode(self):
-        return self.SPLEN.to_bytes(2, "big") + self.SPDATA + self.SPKEYLEN.to_bytes(2, "big") + self.SPKEY + utils.randomBytes(16)
+    #def encode(self):
+        #return self.SPLEN.to_bytes(2, "big") + self.SPDATA + self.SPKEYLEN.to_bytes(2, "big") + self.SPKEY + utils.randomBytes(16)
             
 
 
+
+class BasePacket:
+    structure = []
+    defaultFields = {}
+    def __init__(self, **kwargs):
+        # TODO: Verify types and stuff
+        self.fields = self.defaultFields
+        self.fields.update(kwargs)
+    def isComplete(self):
+        for field in fields:
+            if fields[field] is None:
+                return False
+        return True
+    def encode(self):
+        assert self.isComplete()
+        result = b''
+        for elem in structure:
+            if elem[1] == int:
+                result += fields[elem[0]].to_bytes(elem[2], "big")
+            elif elem[1] == bytes:
+                result += len(fields[elem[0]]).to_bytes(-elem[2], "big") + fields[elem[0]]
+            else:
+                utils.raiseException("protocol.BasePacket.encode", "Not implemented")
+        return result
+    
+    @classmethod
+    def parse(cls, buf):
+        # TODO: More verification
+        result = cls()
+        ptr = 0
+        for elem in cls.structure:
+            if elem[1] == int:
+                if ptr + elem[2] > len(buf):
+                    return None
+                result.fields[elem[0]] = int.from_bytes(buf[ptr:ptr + elem[2]], "big")
+                ptr += elem[2]
+            elif elem[1] == bytes:
+                if elem[2] < 0:
+                    if ptr - elem[2] > len(buf):
+                        return None
+                    length = int.from_bytes(buf[ptr:ptr - elem[2]], "big")
+                    ptr += -elem[2]
+                    if ptr + length > len(buf):
+                        return None                
+                    result.fields[elem[0]] = buf[ptr:ptr + length]
+                    ptr += length
+                else:
+                    if ptr + elem[2] > len(buf):
+                        return None
+                    result.fields[elem[0]] = buf[ptr:ptr + elem[2]]
+                    ptr += elem[2]
+            else:
+                utils.raiseException("protocol.BasePacket.encode", "Not implemented")
+        return ptr, result
+
+
+class _EPACKET(BasePacket):
+    pass
+
+
+class SPACKET(BasePacket):
+    structure = [("SPDATA", bytes, -2), ("SPKEY", bytes, -2), ("salt", bytes, 16)]
+    fields = {"SPDATA": None, "SPKEY": None, "salt":None}
 

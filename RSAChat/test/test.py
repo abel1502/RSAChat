@@ -1,33 +1,18 @@
 def tmain():
-    from .. import utils
-    from .. import network
     from .. import protocol
-    import time
+    from .. import utils
+    print(protocol.SPACKET.parse(b'\x00\x0eThis is SPDATA\x00\x0dThis is SPKEYsaltsaltsaltsalt')[1].fields)
     
-    network.Client("localhost", port=8889)
-    network.CLIENT.start()
-    #time.sleep(2)
-    p = protocol.EPACKET(6, -1, b'Hello there!')
-    #time.sleep(2)
-    network.CLIENT.aioClient[1].transport.write(p.encode())
-    #time.sleep(2)
-    network.CLIENT.abort()
+    #from .. import utils
+    #from .. import network
+    #from .. import protocol
+    #import time
+    #network.Client("localhost", port=8889)
+    #network.CLIENT.start()
+    #p = protocol.EPACKET(6, -1, b'Hello there!')
+    #network.CLIENT.aioClient[1].transport.write(p.encode())
+    #network.CLIENT.abort()
     
-    #cl = network.Client("localhost", 8889)
-    #cl.start()
-    #time.sleep(10)
-    #data = cl.recv(20)
-    #print(data)
-    #cl.close()
-    
-    #cl = network.Client()
-    #cl.connect("localhost", 8887)
-    #cl.startMain()
-    #time.sleep(10)
-    #EPID, EPDATA = cl.recievePacket()
-    #print(EPID)
-    #print(EPDATA.decode())
-    #cl.abort()
     utils.exit()
     
     #from .. import RSA
