@@ -75,7 +75,7 @@ def randomPrime(minl, maxl):
 
 
 def int2bytes(n):
-    return n.to_bytes(math.ceil(math.log(n, 256)), "big")
+    return n.to_bytes(max(math.ceil(math.log(n, 256)), 1), "big")
 
 
 def raiseException(source, text):
@@ -126,3 +126,14 @@ def popBuf(buf, length):
 
 def randomBytes(length):
     return random.randint(0, 256 ** length).to_bytes(length, "big")
+
+
+#def pad(data, length):
+    #assert length > len(data)
+    #if length - len(data) == 1:
+        #return '\x01' + data
+    #return (length - len(data)).to_bytes(2, "big") * (length - len(data)) + data
+
+#def unpad(data):
+    #length = data[0]
+    #return data[length:]

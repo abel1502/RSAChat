@@ -1,7 +1,7 @@
 # TODO: Int mustn't be encrypted!
 
 from . import utils
-from . import math
+import math
 import base64
 import os
 from . import config
@@ -14,29 +14,19 @@ class PublicKey:
         utils.checkParamTypes("RSA.PublicKey", (n, e), ({int}, {int}))
         self.n = n
         self.e = e
+        self.blockLen = int(math.log(self.n, 256))  # One of those if FF padding
     
     def encrypt(self, msg):
-        #if blockLen is None:
-        #    blockLen = int(math.log(self.n, 256))
-        utils.checkParamTypes("RSA.PublicKey.encrypt", [msg], [{int, bytes}])
-        #blockSize = 256 ** blockLen
-        #if blockSize >= self.n:
-        #    utils.raiseException("in RSA.PublicKey.encrypt", "Each block must be less than N")
-        if type(msg) == bytes:
-            msg = int.from_bytes(msg, "big") #msg.to_bytes(math.ceil(math.log(msg, 256)))
-        #if len(msg) % blockLen != 0:
-        #    msg = bytes([0] * (blockLen - len(msg) % blockLen)) + msg
-        encrypted = 0
-        #for i in range(0, len(msg), blockLen):
-        blockSize = self.n // 65536
-        blockLen = math.ceil(math.log(blockSize, 256))
-        while msg > 0:
-            encrypted = encrypted * blockSize + self._encryptBlock((msg % blockSize).to_bytes(blockLen, "big"))
-            msg //= blockSize
+        utils.checkParamTypes("RSA.PublicKey.encrypt", [msg], [{bytes}])
+        padAmount = (-len(msg)) % (self.blockLen - 1)
+        #msg = b'\x00' * ((-len(msg)) % (self.blockLen - 1)) + msg  # ?
+        encrypted = 1
+        for block in range((len(msg) + padAmount) // (self.blockLen - 1)):
+            encrypted = encrypted * self.n + self._encryptBlock(msg[block * (self.blockLen - 1) - padAmount:(block + 1) * (self.blockLen - 1) - padAmount])
         return utils.int2bytes(encrypted)
     
     def verify(self, signature):
-        utils.checkParamTypes("RSA.PublicKey._encryptBlock", [msg], [{bytes}])
+        utils.checkParamTypes("RSA.PublicKey.verify", [msg], [{bytes}])
         msg = int.from_bytes(msg, "big")
         if msg >= self.n:
             utils.raiseException("RSA.PublicKey._encryptBlock", "Message must be less than N")
@@ -76,6 +66,7 @@ class PrivateKey:
         self.n = n
         self.e = e
         self.d = d
+        self.blockLen = int(math.log(self.n, 256))  # One of those if FF padding
     
     def _decryptBlock(self, msg):
         utils.checkParamTypes("RSA.PrivateKey._decryptBlock", [msg], [{bytes}])
@@ -85,24 +76,13 @@ class PrivateKey:
         return utils.int2bytes(pow(msg, self.d, self.n))[1:]
     
     def decrypt(self, msg):
-        #if blockLen is None:
-        #    blockLen = int(math.log(self.n, 256))
         utils.checkParamTypes("RSA.PrivateKey.decrypt", [msg], [{bytes}])
-        #blockSize = 256 ** blockLen
-        #if blockSize >= self.n:
-        #    utils.raiseException("RSA.PrivateKey.decrypt", "Each block must be less than N")
-        if type(msg) == bytes:
-            msg = int.from_bytes(msg, "big") #msg.to_bytes(math.ceil(math.log(msg, 256)), "big")
-        #if len(msg) % blockLen != 0:
-        #    msg = bytes([0] * (blockLen - len(msg) % blockLen)) + msg
-        decrypted = 0
-        #for i in range(0, len(msg), blockLen):
-        blockSize = n // 65536
-        blockLen = math.ceil(math.log(blockSize, 2))
+        msg = int.from_bytes(msg, "big")
+        decrypted = b''
         while msg > 0:
-            decrypted = decrypted * blockSize + self._decryptBlock((msg % blockSize).to_bytes(blockLen, "big"))
-            msg //= blockSize
-        return utils.int2bytes(decrypted)
+            decrypted += self._decryptBlock(utils.int2bytes(msg % self.n))
+            msg = msg // self.n
+        return decrypted
     
     def sign(self, msg):
         utils.checkParamTypes("RSA.PrivateKey.sign", [msg], [{bytes}])
@@ -154,9 +134,3 @@ def genKeyPair(length=1024, custom_e=None):
     phi = (p - 1) * (q - 1)
     d = utils.modularInverse(e, phi)
     return (PublicKey(n, e), PrivateKey(n, e, d))
-
-
-#def getSessionKey(clientPublicKey, length=256):
-    #utils.checkParamTypes("RSA.genSessionKey", [clientPublicKey, length], [{PublicKey}, {int}])
-    #plainKey = os.urandom(length)
-    #return plainKey, clientPublicKey.encrypt(plainKey)

@@ -83,23 +83,37 @@ class EPACKET:
 class BasePacket:
     structure = []
     defaultFields = {}
+    
     def __init__(self, **kwargs):
         # TODO: Verify types and stuff
         self.fields = self.defaultFields
         self.fields.update(kwargs)
+    
+    def __getattribute__(self, attr):
+        try:
+            return super().__getattribute__(attr)
+        except AttributeError:
+            return self.fields[attr]
+    
     def isComplete(self):
-        for field in fields:
-            if fields[field] is None:
+        for field in self.fields:
+            if self.fields[field] is None:
                 return False
         return True
+    
     def encode(self):
         assert self.isComplete()
         result = b''
-        for elem in structure:
+        for elem in self.structure:
             if elem[1] == int:
-                result += fields[elem[0]].to_bytes(elem[2], "big")
+                result += self.fields[elem[0]].to_bytes(elem[2], "big")
             elif elem[1] == bytes:
-                result += len(fields[elem[0]]).to_bytes(-elem[2], "big") + fields[elem[0]]
+                if elem[2] < 0:
+                    result += len(self.fields[elem[0]]).to_bytes(-elem[2], "big") + self.fields[elem[0]]
+                else:
+                    value = self.fields[elem[0]][-elem[2]:]
+                    value = '\x00' * (elem[2] - len(value)) + value
+                    result += value
             else:
                 utils.raiseException("protocol.BasePacket.encode", "Not implemented")
         return result
@@ -136,7 +150,8 @@ class BasePacket:
 
 
 class _EPACKET(BasePacket):
-    pass
+    structure = [("EPID", int, 1), ("EPDATA", bytes, -3)]
+    fields = {"EPID": None, "EPDATA": None}
 
 
 class SPACKET(BasePacket):
