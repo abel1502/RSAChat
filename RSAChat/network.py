@@ -91,7 +91,7 @@ class ServerProtocol(asyncio.Protocol):
     def data_received(self, data):
         #print('[*]', data)
         self.recvBuf += data
-        result = protocol._EPACKET.parse(self.recvBuf)
+        result = protocol.EPACKET.parse(self.recvBuf)
         while result is not None:
             self.recvBuf = self.recvBuf[result[0]:]
             self.packets.append(result[1])
@@ -131,7 +131,6 @@ class ClientProtocol(asyncio.Protocol):
     def connection_made(self, transport):
         self.transport = transport
         self.recvBuf = b''
-        self.curPacket = protocol.EPACKET()
         self.packets = deque()
         # The first doesn't work, for some reason
         #global CLIENT
@@ -149,13 +148,11 @@ class ClientProtocol(asyncio.Protocol):
         # TODO: Implement
         print(packet.EPID, packet.EPLEN, packet.EPDATA)
     def data_received(self, data):
-        print('[*]', data)
         self.recvBuf += data
-        self.recvBuf, success = self.curPacket.parse(self.recvBuf)
-        while success:
-            self.packets.append(self.curPacket)
-            self.curPacket = protocol.EPACKET()
-            self.recvBuf, success = self.curPacket.parse(self.recvBuf)
+        result = protocol.EPACKET.parse(self.recvBuf)
+        while result is not None:
+            self.recvBuf = self.recvBuf[result[0]:]
+            self.packets.append(result[1])
     def connection_lost(self, exc=None):
         self.mainThread.stop()
         self.transport.close()
