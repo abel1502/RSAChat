@@ -1,6 +1,8 @@
 from . import utils
 from enum import Enum
-import struct
+#import struct
+import time
+import RSA
 
 
 class EPACKET_TYPE(Enum):
@@ -25,7 +27,7 @@ class BasePacket:
         try:
             return super().__getattribute__(attr)
         except AttributeError:
-            return self.fields[attr]
+            return self.fields[attr]   
     
     def isComplete(self):
         for field in self.fields:
@@ -94,3 +96,18 @@ class SPACKET(BasePacket):
 class PPACKET(BasePacket):
     structure = [("salt", bytes, 16), ("MSG", bytes, -2), ("TIME", int, 4), ("HASH", bytes, -2)]
     fields = {"salt": None, "MSG": None, "TIME": None, "HASH":None}
+    
+    @staticmethod
+    def build(msg, sendTo, replyTo):
+        # TODO: Finish
+        utils.checkParamTypes("protocol.PPACKET.build", (msg, sendto, replyTo), ({bytes, str}, {bytes, str, RSA.PublicKey}, {bytes, str, RSA.PublicKey}))
+        if isinstance(msg, str):
+            msg = msg.encode()
+        if isinstance(sendTo, bytes):
+            sendTo = sendTo.decode()
+        if isinstance(sendTo, str):
+            # Validity check
+            RSA.PublicKey.load(sendTo)
+        if isinstance(sendTo, RSA.PublicKey):
+            sendto = sendTo.dump()
+        #self.fields["MSG"] = 
