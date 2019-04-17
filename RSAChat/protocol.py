@@ -3,6 +3,7 @@ from enum import Enum
 #import struct
 import time
 import RSA
+import hashlib
 
 
 class EPACKET_TYPE(Enum):
@@ -103,11 +104,22 @@ class PPACKET(BasePacket):
         utils.checkParamTypes("protocol.PPACKET.build", (msg, sendto, replyTo), ({bytes, str}, {bytes, str, RSA.PublicKey}, {bytes, str, RSA.PublicKey}))
         if isinstance(msg, str):
             msg = msg.encode()
+        
         if isinstance(sendTo, bytes):
             sendTo = sendTo.decode()
         if isinstance(sendTo, str):
+            sendTo = RSA.PublicKey.load(sendTo)
+        
+        if isinstance(replyTo, bytes):
+            replyTo = replyTo.decode()
+        if isinstance(replyTo, str):
             # Validity check
-            RSA.PublicKey.load(sendTo)
-        if isinstance(sendTo, RSA.PublicKey):
-            sendto = sendTo.dump()
-        #self.fields["MSG"] = 
+            RSA.PublicKey.load(replyTo)
+            replyTo = replyTo.encode()
+        if isinstance(replyTo, RSA.PublicKey):
+            replyTo = replyTo.dump()
+        
+        self.fields["MSG"] = sendTo.encrypt(replyTo + b'\n' + msg)
+        self.fields["salt"] = hashlib.md5(utils.randomBytes(16)).digest()
+        self.fields["TIME"] = int(time.time())
+        #self.fields["HASH"] = 
