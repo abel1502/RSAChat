@@ -88,6 +88,9 @@ class EPACKET(BasePacket):
 
 class SPACKET(BasePacket):
     structure = [("SPDATA", bytes, -2), ("SPKEY", bytes, -2), ("salt", bytes, 16)]
-    fields = {"SPDATA": None, "SPKEY": None, "salt":None}
+    fields = {"SPDATA": None, "SPKEY": None, "salt": None}
 
 
+class PPACKET(BasePacket):
+    structure = [("salt", bytes, 16), ("MSG", bytes, -2), ("TIME", int, 4), ("HASH", bytes, -2)]
+    fields = {"salt": None, "MSG": None, "TIME": None, "HASH":None}
