@@ -86,17 +86,17 @@ class BasePacket:
 
 class EPACKET(BasePacket):
     structure = [("EPID", int, 1), ("EPDATA", bytes, -3)]
-    fields = {"EPID": None, "EPDATA": None}
+    defaultFields = {"EPID": None, "EPDATA": None}
 
 
 class SPACKET(BasePacket):
     structure = [("SPDATA", bytes, -2), ("SPKEY", bytes, -2), ("salt", bytes, 16)]
-    fields = {"SPDATA": None, "SPKEY": None, "salt": None}
+    defaultFields = {"SPDATA": None, "SPKEY": None, "salt": None}
 
 
 class PPACKET(BasePacket):
     structure = [("salt", bytes, 16), ("MSG", bytes, -2), ("TIME", int, 4), ("HASH", bytes, -2)]
-    fields = {"salt": None, "MSG": None, "TIME": None, "HASH":None}
+    defaultFields = {"salt": None, "MSG": None, "TIME": None, "HASH":None}
     
     @staticmethod
     def build(msg, sendTo, replyTo):
@@ -119,7 +119,17 @@ class PPACKET(BasePacket):
         if isinstance(replyTo, RSA.PublicKey):
             replyTo = replyTo.dump()
         
-        self.fields["MSG"] = sendTo.encrypt(replyTo + b'\n' + msg)
-        self.fields["salt"] = hashlib.md5(utils.randomBytes(16)).digest()
-        self.fields["TIME"] = int(time.time())
-        #self.fields["HASH"] = 
+        plain_MSG = replyTo + b'\n' + msg
+        MSG = sendTo.encrypt(plainMSG)
+        salt = hashlib.md5(utils.randomBytes(16)).digest()
+        TIME = int(time.time())
+        HASH = hashlib.sha256(salt + plainMSG + TIME.to_bytes(4, "big")).digest()
+        return PPACKET(MSG=MSG, salt=salt, TIME=TIME, HASH.HASH)
+    
+    def extractPlain(self, key):
+        utils.checkParamTypes
+    
+    def verify(self):
+        return self.fields["HASH"] == hashlib.sha256(self.salt + self.MSG + self.time.to_bytes(4, "big")).digest()
+
+

@@ -63,12 +63,12 @@ class ServerProtocol(asyncio.Protocol):
             if packet.EPID == protocol.EPACKET_TYPE.HSH_CL_ASK:
                 # TODO: Verify
                 self.clPublicKey = RSA.PublicKey.load(packet.EPDATA.decode())
-                self.sendPacket(protocol.EPACKET(protocol.EPACKET_TYPE.HSH_SRV_ANS, -1, self.clPublicKey.encrypt(SERVER.privKey.getPublicKey.dump())))
+                self.sendPacket(protocol.EPACKET(EPID=protocol.EPACKET_TYPE.HSH_SRV_ANS, EPDATA=self.clPublicKey.encrypt(SERVER.privKey.getPublicKey.dump())))
             elif packet.EPID == protocol.EPACKET_TYPE.HSH_CL_SIMPLE:
                 # TODO: Verify again
                 self.clPublicKey = RSA.PublicKey.load(SERVER.privKey.decrypt(packet.EPDATA).decode())
-                self.challenge = utils.randomBytes(16)
-                self.sendPacket(protocol.EPACKET(protocol.EPACKET_TYPE.HSH_VER_ASK, -1, self.clPublicKey.encrypt(self.challenge)))
+                self.challenge = hashlib.md5(utils.randomBytes(16)).digest()
+                self.sendPacket(protocol.EPACKET(EPID=protocol.EPACKET_TYPE.HSH_VER_ASK, EPDATA=self.clPublicKey.encrypt(self.challenge)))
             else:
                 # TODO: Quit this guy!
                 self.connection_lost()
