@@ -1,11 +1,20 @@
 def tmain():
-    #from .. import protocol
-    #from .. import utils
+    from .. import protocol
+    from .. import utils
+    from .. import credentials
+    from .. import RSA
     #print(protocol._EPACKET.parse(b'\x01\x00\x00\x0eThis is EPDATA')[1].EPDATA)
     #print(protocol._EPACKET(EPID=1, EPDATA=b'This is EPDATA').encode())
     #print(protocol.SPACKET.parse(b'\x00\x0eThis is SPDATA\x00\x0dThis is SPKEYsaltsaltsaltsalt')[1].fields)
+    key2 = RSA.PrivateKey.load("#AbelRSA Private Key#Ae8fHQWV6v/d4KR9N7PwjCZHIwqbZXZGjKlDDn2nhsy44bB26CYAfi9p1R5UDHnoUwwGQXaTNLawvRHbBZGXJCNKR0gwTXHvkrt5Q6CU0airaByBAjZ3p0zfm0W1#AQAB#Admc54QKTksHEPYHmZsUhNuwvIJO95VWEwNuU5Q7BiUZbAnUavra9+5igHtn/hGgqzI1zChFoGnClhgSaYs9iqsHREHMj7o0AATE5zHeTSU3KOlh7OaiXL6m6kFB#")
+    sendTo = key2.getPublicKey()
+    p = protocol.PPACKET.build("Hello!", sendTo, credentials.get("Client", "key"))
+    print(p.encode())
+    p = protocol.PPACKET.parse(p.encode())
+    print(p.verify())
+    print(p.extractPlain(key2))
     
-    from .. import utils
+    #from .. import utils
     #from .. import network
     #from .. import protocol
     #import time

@@ -9,7 +9,7 @@ from . import RSA
 from . import cryptoRandom
 import hashlib
 
-PACKET_SIZE = int(config.getValue("Network", "Packet_Size", "4096"))
+PACKET_SIZE = config.get("Network", "Packet_Size", 4096, int)
 SERVER = None
 CLIENT = None
 SENDBUF = {} # Public key -> send packet queue

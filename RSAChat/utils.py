@@ -99,6 +99,27 @@ def openIni(path):
     parser.read(path)
     return parser
 
+
+class IniParser:
+    def __init__(self, iniFilePath):
+        checkParamTypes("utils.IniParser", (iniFilePath), ({str}))
+        self.filePath = iniFilePath
+        self.parser = openIni(iniFilePath)
+        
+    def get(self, section, key, default=None, excpected=str):
+        checkParamTypes("utils.IniParser.get", [section, key], [{str}, {str}])
+        try:
+            return expected(self.parser.get(section, key))
+        except:
+            return default
+        
+    def set(self, section, key, value):
+        checkParamTypes("utils.IniParser.set", [section, key], [{str}, {str}])
+        self.parser.set(section, key, str(value))
+        with open(self.filePath, "w") as f:
+            self.parser.write(f)
+
+
 def exit():
     time.sleep(2)  # So that all threads can finish?...
 

@@ -2,7 +2,7 @@ from . import utils
 from enum import Enum
 #import struct
 import time
-import RSA
+from . import RSA
 import hashlib
 
 
@@ -99,9 +99,9 @@ class PPACKET(BasePacket):
     defaultFields = {"salt": None, "MSG": None, "TIME": None, "HASH":None}
     
     @staticmethod
-    def build(msg, sendTo, replyTo):
+    def build(msg, sendTo, key):
         # TODO: Finish
-        utils.checkParamTypes("protocol.PPACKET.build", (msg, sendto, replyTo), ({bytes, str}, {bytes, str, RSA.PublicKey}, {bytes, str, RSA.PublicKey}))
+        utils.checkParamTypes("protocol.PPACKET.build", (msg, sendto, key), ({bytes, str}, {bytes, str, RSA.PublicKey}, {bytes, str, RSA.PrivateKey}))
         if isinstance(msg, str):
             msg = msg.encode()
         
@@ -110,26 +110,34 @@ class PPACKET(BasePacket):
         if isinstance(sendTo, str):
             sendTo = RSA.PublicKey.load(sendTo)
         
-        if isinstance(replyTo, bytes):
-            replyTo = replyTo.decode()
-        if isinstance(replyTo, str):
-            # Validity check
-            RSA.PublicKey.load(replyTo)
-            replyTo = replyTo.encode()
-        if isinstance(replyTo, RSA.PublicKey):
-            replyTo = replyTo.dump()
+        if isinstance(key, bytes):
+            key = key.decode()
+        if isinstance(key, str):
+            key = RSA.PrivateKey.load(key)
+        
+        replyTo = key.getPublicKey()
         
         plain_MSG = replyTo + b'\n' + msg
         MSG = sendTo.encrypt(plainMSG)
         salt = hashlib.md5(utils.randomBytes(16)).digest()
         TIME = int(time.time())
-        HASH = hashlib.sha256(salt + plainMSG + TIME.to_bytes(4, "big")).digest()
-        return PPACKET(MSG=MSG, salt=salt, TIME=TIME, HASH.HASH)
+        HASH = key.sign(hashlib.sha256(salt + plainMSG + TIME.to_bytes(4, "big")).digest())
+        return PPACKET(MSG=MSG, salt=salt, TIME=TIME, HASH=HASH)
     
     def extractPlain(self, key):
-        utils.checkParamTypes
+        utils.checkParamTypes("protocol.PPACKET.extractPlain", (key), ({bytes, str, RSA.PrivateKey}))
+        if isinstance(key, bytes):
+            key = key.decode()
+        if isinstance(key, str):
+            key = RSA.PublicKey.load(key)
+        return key.decrypt(self.MSG).split(b'\n', 1)
     
-    def verify(self):
-        return self.fields["HASH"] == hashlib.sha256(self.salt + self.MSG + self.time.to_bytes(4, "big")).digest()
+    def verify(self, key):
+        utils.checkParamTypes("protocol.PPACKET.verify", (key), ({bytes, str, RSA.PublicKey}))
+        if isinstance(key, bytes):
+            key = key.decode()
+        if isinstance(key, str):
+            key = RSA.PublicKey.load(key)
+        return key.verify(self.fields["HASH"]) == hashlib.sha256(self.salt + b'\n'.join(self.extractPlain()) + self.time.to_bytes(4, "big")).digest()
 
 

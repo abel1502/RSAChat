@@ -1,12 +1,10 @@
-# TODO: Int mustn't be encrypted!
-
 from . import utils
 import math
 import base64
 import os
 from . import config
 
-DEFAULT_E = int(config.getValue("RSA", "Default_E", "65537"))
+DEFAULT_E = config.getValue("RSA", "Default_E", 65537, int)
 
 
 class PublicKey:
