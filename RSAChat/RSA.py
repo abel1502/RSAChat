@@ -4,7 +4,7 @@ import base64
 import os
 from . import config
 
-DEFAULT_E = config.getValue("RSA", "Default_E", 65537, int)
+DEFAULT_E = config.get("Crypto", "Default_E", 65537, int)
 
 
 class PublicKey:
@@ -20,15 +20,16 @@ class PublicKey:
         #msg = b'\x00' * ((-len(msg)) % (self.blockLen - 1)) + msg  # ?
         encrypted = 1
         for block in range((len(msg) + padAmount) // (self.blockLen - 1)):
-            encrypted = encrypted * self.n + self._encryptBlock(msg[block * (self.blockLen - 1) - padAmount:(block + 1) * (self.blockLen - 1) - padAmount])
+            encrypted = encrypted * self.n + self._encryptBlock(msg[max(block * (self.blockLen - 1) - padAmount, 0):(block + 1) * (self.blockLen - 1) - padAmount])
         return utils.int2bytes(encrypted)
     
-    def verify(self, signature):
+    def verify(self, msg):
         utils.checkParamTypes("RSA.PublicKey.verify", [msg], [{bytes}])
-        msg = int.from_bytes(msg, "big")
-        if msg >= self.n:
-            utils.raiseException("RSA.PublicKey._encryptBlock", "Message must be less than N")
-        return utils.int2bytes(pow(msg, self.e, self.n))[1:]
+        return PrivateKey(self.n, -1, self.e).decrypt(msg)
+        #msg = int.from_bytes(msg, "big")
+        #if msg >= self.n:
+            #utils.raiseException("RSA.PublicKey._encryptBlock", "Message must be less than N")
+        #return utils.int2bytes(pow(msg, self.e, self.n))[1:]
     
     def _encryptBlock(self, msg):
         utils.checkParamTypes("RSA.PublicKey._encryptBlock", [msg], [{bytes}])
@@ -78,17 +79,18 @@ class PrivateKey:
         msg = int.from_bytes(msg, "big")
         decrypted = b''
         while msg > 0:
-            decrypted += self._decryptBlock(utils.int2bytes(msg % self.n))
+            decrypted = self._decryptBlock(utils.int2bytes(msg % self.n)) + decrypted
             msg = msg // self.n
         return decrypted
     
     def sign(self, msg):
         utils.checkParamTypes("RSA.PrivateKey.sign", [msg], [{bytes}])
-        msg = b"\xff" + msg
-        msg = int.from_bytes(msg, "big")
-        if msg >= self.n:
-            utils.raiseException("RSA.PrivateKey.sign", "Message must be less than N")
-        return pow(msg, self.d, self.n)
+        return PublicKey(self.n, self.d).encrypt(msg)
+        #msg = b"\xff" + msg
+        #msg = int.from_bytes(msg, "big")
+        #if msg >= self.n:
+            #utils.raiseException("RSA.PrivateKey.sign", "Message must be less than N")
+        #return utils.int2bytes(pow(msg, self.d, self.n))
     
     def dump(self):
         return("#AbelRSA Private Key#{}#{}#{}#".format(base64.b64encode(utils.int2bytes(self.n)).decode(), base64.b64encode(utils.int2bytes(self.e)).decode(), base64.b64encode(utils.int2bytes(self.d)).decode()))

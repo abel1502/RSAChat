@@ -102,11 +102,11 @@ def openIni(path):
 
 class IniParser:
     def __init__(self, iniFilePath):
-        checkParamTypes("utils.IniParser", (iniFilePath), ({str}))
+        checkParamTypes("utils.IniParser", [iniFilePath], [{str}])
         self.filePath = iniFilePath
         self.parser = openIni(iniFilePath)
         
-    def get(self, section, key, default=None, excpected=str):
+    def get(self, section, key, default=None, expected=str):
         checkParamTypes("utils.IniParser.get", [section, key], [{str}, {str}])
         try:
             return expected(self.parser.get(section, key))

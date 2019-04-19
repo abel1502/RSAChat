@@ -47,7 +47,7 @@ class BasePacket:
                     result += len(self.fields[elem[0]]).to_bytes(-elem[2], "big") + self.fields[elem[0]]
                 else:
                     value = self.fields[elem[0]][-elem[2]:]
-                    value = '\x00' * (elem[2] - len(value)) + value
+                    value = b'\x00' * (elem[2] - len(value)) + value
                     result += value
             else:
                 utils.raiseException("protocol.BasePacket.encode", "Not implemented")
@@ -101,7 +101,7 @@ class PPACKET(BasePacket):
     @staticmethod
     def build(msg, sendTo, key):
         # TODO: Finish
-        utils.checkParamTypes("protocol.PPACKET.build", (msg, sendto, key), ({bytes, str}, {bytes, str, RSA.PublicKey}, {bytes, str, RSA.PrivateKey}))
+        utils.checkParamTypes("protocol.PPACKET.build", [msg, sendTo, key], [{bytes, str}, {bytes, str, RSA.PublicKey}, {bytes, str, RSA.PrivateKey}])
         if isinstance(msg, str):
             msg = msg.encode()
         
@@ -117,7 +117,7 @@ class PPACKET(BasePacket):
         
         replyTo = key.getPublicKey()
         
-        plain_MSG = replyTo + b'\n' + msg
+        plainMSG = replyTo.dump().encode() + b'\n' + msg
         MSG = sendTo.encrypt(plainMSG)
         salt = hashlib.md5(utils.randomBytes(16)).digest()
         TIME = int(time.time())
@@ -125,19 +125,25 @@ class PPACKET(BasePacket):
         return PPACKET(MSG=MSG, salt=salt, TIME=TIME, HASH=HASH)
     
     def extractPlain(self, key):
-        utils.checkParamTypes("protocol.PPACKET.extractPlain", (key), ({bytes, str, RSA.PrivateKey}))
+        utils.checkParamTypes("protocol.PPACKET.extractPlain", [key], [{bytes, str, RSA.PrivateKey}])
         if isinstance(key, bytes):
             key = key.decode()
         if isinstance(key, str):
             key = RSA.PublicKey.load(key)
         return key.decrypt(self.MSG).split(b'\n', 1)
     
-    def verify(self, key):
-        utils.checkParamTypes("protocol.PPACKET.verify", (key), ({bytes, str, RSA.PublicKey}))
+    def verify(self, replyTo, key):
+        utils.checkParamTypes("protocol.PPACKET.verify", [replyTo, key], [{bytes, str, RSA.PublicKey}, {bytes, str, RSA.PrivateKey}])
+        if isinstance(replyTo, bytes):
+            replyTo = replyTo.decode()
+        if isinstance(replyTo, str):
+            replyTo = RSA.PublicKey.load(replyTo)
+        
         if isinstance(key, bytes):
             key = key.decode()
         if isinstance(key, str):
             key = RSA.PublicKey.load(key)
-        return key.verify(self.fields["HASH"]) == hashlib.sha256(self.salt + b'\n'.join(self.extractPlain()) + self.time.to_bytes(4, "big")).digest()
+        
+        return replyTo.verify(self.HASH) == hashlib.sha256(self.salt + b'\n'.join(self.extractPlain(key)) + self.TIME.to_bytes(4, "big")).digest()
 
 
