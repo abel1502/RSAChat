@@ -1,3 +1,5 @@
+# TODO: verify tons of stuff!!!!
+
 from . import utils
 from enum import Enum
 #import struct
@@ -82,16 +84,45 @@ class BasePacket:
             else:
                 utils.raiseException("protocol.BasePacket.encode", "Not implemented")
         return ptr, result
+    
+    def __repr__(self):
+        return "{}({})".format(self.__class__.__name__, ', '.join(map(lambda x: "{}={}".format(x, repr(self.fields[x])), self.fields)))
 
 
 class EPACKET(BasePacket):
     structure = [("EPID", int, 1), ("EPDATA", bytes, -3)]
     defaultFields = {"EPID": None, "EPDATA": None}
+    
+    @staticmethod
+    def build(spacket, serverKey):
+        utils.checkParamTypes("protocol.EPACKET.build", [spacket, serverKey], [{SPACKET}, {bytes, str, RSA.PublicKey}])
+        serverKey = RSA.loadKey(serverKey)
+        return EPACKET(EPID=EPACKET_TYPE.REGULAR, EPDATA=serverKey.encrypt(spacket.encode()))
+    
+    def decrypt(self, key):
+        utils.checkParamTypes("protocol.EPACKET.decrypt", [key], [{bytes, str, RSA.PrivateKey}])
+        assert self.isComplete()
+        assert self.EPID == EPACKET_TYPE.REGULAR
+        key = RSA.loadKey(key)
+        return SPACKET.parse(key.decrypt(self.EPDATA))
 
 
 class SPACKET(BasePacket):
     structure = [("SPDATA", bytes, -2), ("SPKEY", bytes, -2), ("salt", bytes, 16)]
     defaultFields = {"SPDATA": None, "SPKEY": None, "salt": None}
+    
+    @staticmethod
+    def build(ppacket, sendTo):
+        utils.checkParamTypes("protocol.SPACKET.build", [ppacket, sendTo], [{PPACKET}, {bytes, str, RSA.PublicKey}])
+        sendTo = RSA.loadKey(sendTo)
+        return SPACKET(SPDATA=sendTo.encrypt(ppacket.encode()), SPKEY=sendTo.dump().encode(), salt=hashlib.md5(utils.randomBytes(16)).digest())
+    
+    def decrypt(self, key):
+        utils.checkParamTypes("protocol.SPACKET.decrypt", [key], [{bytes, str, RSA.PrivateKey}])
+        assert self.isComplete()
+        key = RSA.loadKey(key)
+        return PPACKET.parse(key.decrypt(self.SPDATA))[1], RSA.loadKey(self.SPKEY.decode())
+        
 
 
 class PPACKET(BasePacket):
@@ -104,14 +135,9 @@ class PPACKET(BasePacket):
         utils.checkParamTypes("protocol.PPACKET.build", [msg, key], [{bytes, str}, {bytes, str, RSA.PrivateKey}])
         if isinstance(msg, str):
             msg = msg.encode()
-        
-        if isinstance(key, bytes):
-            key = key.decode()
-        if isinstance(key, str):
-            key = RSA.PrivateKey.load(key)
-        
+        assert len(msg) < 30000
+        key = RSA.loadKey(key)
         replyTo = key.getPublicKey()
-        
         MSG = replyTo.dump().encode() + b'\n' + msg
         salt = hashlib.md5(utils.randomBytes(16)).digest()
         TIME = int(time.time())
@@ -120,10 +146,8 @@ class PPACKET(BasePacket):
         
     def verify(self, replyTo):
         utils.checkParamTypes("protocol.PPACKET.verify", [replyTo], [{bytes, str, RSA.PublicKey}])
-        if isinstance(replyTo, bytes):
-            replyTo = replyTo.decode()
-        if isinstance(replyTo, str):
-            replyTo = RSA.PublicKey.load(replyTo)        
+        assert self.isComplete()
+        replyTo = RSA.loadKey(replyTo)        
         return replyTo.verify(self.HASH) == hashlib.sha256(self.salt + self.MSG + self.TIME.to_bytes(4, "big")).digest()
 
 

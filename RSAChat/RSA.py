@@ -54,7 +54,7 @@ class PublicKey:
         try:
             n = int.from_bytes(base64.b64decode(n.encode()), 'big')
             e = int.from_bytes(base64.b64decode(e.encode()), 'big')
-            return PrivateKey(n, e, d)
+            return PublicKey(n, e)
         except:
             utils.raiseException("RSA.PublicKey.load", "keyStr is not a valid AbelRSA Public Key")
 
@@ -134,3 +134,16 @@ def genKeyPair(length=1024, custom_e=None):
     phi = (p - 1) * (q - 1)
     d = utils.modularInverse(e, phi)
     return (PublicKey(n, e), PrivateKey(n, e, d))
+
+
+def loadKey(key):
+    utils.checkParamTypes("RSA.loadKey", [key], [{bytes, str, PublicKey, PrivateKey}])
+    if isinstance(key, bytes):
+        key = key.decode()
+    if isinstance(key, str):
+        try:
+            return PrivateKey.load(key)
+        except:
+            return PublicKey.load(key)
+    else:
+        return key
