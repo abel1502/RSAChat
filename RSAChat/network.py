@@ -87,7 +87,7 @@ class ServerProtocol(asyncio.Protocol):
             # TODO: Normal packet handling
             self.handleSPacket(protocol.SPACKET.parse(SERVER.privKey.decrypt(packet.EPDATA)))
     def handleSPacket(self, packet):
-        pass
+        print("Gotta send to", protocol.SPACKET.SPKEY)
     def data_received(self, data):
         #print('[*]', data)
         self.recvBuf += data
@@ -139,6 +139,7 @@ class ClientProtocol(asyncio.Protocol):
         #CLIENT_PROTOCOL = self
         self.mainThread = utils.Thread(target=self.handlePackets)
         self.mainThread.start()
+        self.sPublicKey = None
     def handlePackets(self):
         while not self.mainThread.stopped():
             if len(self.packets) > 0:
@@ -147,6 +148,33 @@ class ClientProtocol(asyncio.Protocol):
     def handleSinglePacket(self, packet):
         # TODO: Implement
         print(packet.EPID, packet.EPLEN, packet.EPDATA)
+        #if self.sPublicKey is None:
+            #if packet.EPID == protocol.EPACKET_TYPE.HSH_SRV_ANS:
+                ## TODO: Verify
+                #self.sPublicKey = RSA.PublicKey.load(packet.EPDATA.decode())
+                #self.sendPacket(protocol.EPACKET(EPID=protocol.EPACKET_TYPE.HSH_SRV_ANS, EPDATA=self.clPublicKey.encrypt(SERVER.privKey.getPublicKey.dump())))
+            #elif packet.EPID == protocol.EPACKET_TYPE.HSH_CL_SIMPLE:
+                ## TODO: Verify again
+                #self.clPublicKey = RSA.PublicKey.load(SERVER.privKey.decrypt(packet.EPDATA).decode())
+                #self.challenge = hashlib.md5(utils.randomBytes(16)).digest()
+                #self.sendPacket(protocol.EPACKET(EPID=protocol.EPACKET_TYPE.HSH_VER_ASK, EPDATA=self.clPublicKey.encrypt(self.challenge)))
+            #else:
+                ## TODO: Quit this guy!
+                #self.connection_lost()
+        #elif not self.clPublicKeyVerified:
+            #if packet.EPID == protocol.EPACKET_TYPE.HSH_VER_ANS:
+                ## TODO: And again
+                #if hashlib.sha256(self.challenge).digest() == SERVER.privKey.decrypt(packet.EPDATA):
+                    #self.clPublicKeyVerified = True
+                #else:
+                    ## TODO: Quit this guy!
+                    #self.connection_lost()
+            #else:
+                ## TODO: Quit this guy!
+                #self.connection_lost()
+        #else:
+            ## TODO: Normal packet handling
+            #self.handleSPacket(protocol.SPACKET.parse(SERVER.privKey.decrypt(packet.EPDATA)))
     def data_received(self, data):
         self.recvBuf += data
         result = protocol.EPACKET.parse(self.recvBuf)
