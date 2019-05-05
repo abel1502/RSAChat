@@ -49,9 +49,13 @@ class ServerProtocol(asyncio.Protocol):
         self.clPublicKeyVerified = False
     def sendPacket(self, packet):
         # TODO: Temporary?
-        pass
+        utils.checkParamTypes("network.ServerProtocol.sendPacket", [packet], [protocol.EPACKET])
+        self.transport.send(packet.encode())
     def handlePackets(self):
+        global SENDBUF
         while not self.mainThread.stopped():
+            if self.clPublicKeyVerified and len(SENDBUF[self.clPublicKey.dump()]) > 0:
+                self.sendPacket(protocol.EPACKET(EPID=protocol.EPACKET_TYPE.REGULAR, EPDATA=self.clPublicKey.encrypt(SENDBUF[self.clPublicKey.dump()].popleft())))
             if len(self.packets) > 0:
                 self.handleSinglePacket(self.packets.popleft())
             time.sleep(0.5)
@@ -77,6 +81,8 @@ class ServerProtocol(asyncio.Protocol):
                 # TODO: And again
                 if hashlib.sha256(self.challenge).digest() == SERVER.privKey.decrypt(packet.EPDATA):
                     self.clPublicKeyVerified = True
+                    global SENDBUF
+                    SENDBUF[self.clPublicKey.dump()] = deque()
                 else:
                     # TODO: Quit this guy!
                     self.connection_lost()
@@ -87,7 +93,11 @@ class ServerProtocol(asyncio.Protocol):
             # TODO: Normal packet handling
             self.handleSPacket(protocol.SPACKET.parse(SERVER.privKey.decrypt(packet.EPDATA)))
     def handleSPacket(self, packet):
-        print("Gotta send to", protocol.SPACKET.SPKEY)
+        # TODO: Modify packet... ?
+        key = protocol.SPACKET.SPKEY.dump()
+        print("Gotta send to", key)
+        global SENDBUF
+        SENDBUF[key] = packet
     def data_received(self, data):
         #print('[*]', data)
         self.recvBuf += data
@@ -107,13 +117,15 @@ class ServerProtocol(asyncio.Protocol):
 
 
 class Client:
-    def __init__(self, host, port=8887):
+    def __init__(self, host, port=8887, privKey=None, sKey=None):
         global CLIENT
         CLIENT = self
         self.eventLoop = asyncio.get_event_loop()
         coro = self.eventLoop.create_connection(ClientProtocol, host, port)
         self.aioClient = self.eventLoop.run_until_complete(coro)
         self.protocol = None
+        self.sKey = sKey
+        self.privKey = privKey if privKey is not None else RSA.genKeyPair()[1]
     def start(self):
         utils.startThread(self.eventLoop.run_forever)
     def abort(self):
@@ -133,48 +145,54 @@ class ClientProtocol(asyncio.Protocol):
         self.recvBuf = b''
         self.packets = deque()
         # The first doesn't work, for some reason
-        #global CLIENT
+        global CLIENT
         #CLIENT.protocol = self
         #global CLIENT_PROTOCOL
         #CLIENT_PROTOCOL = self
         self.mainThread = utils.Thread(target=self.handlePackets)
         self.mainThread.start()
-        self.sPublicKey = None
+        self.sPublicKey = CLIENT.sKey
+        self.verified = False
+        self.initialize()
+    def sendPacket(self, packet):
+        # TODO: Temporary?
+        utils.checkParamTypes("network.ClientProtocol.sendPacket", [packet], [protocol.EPACKET])
+        self.transport.send(packet.encode())    
     def handlePackets(self):
         while not self.mainThread.stopped():
             if len(self.packets) > 0:
                 self.handleSinglePacket(self.packets.popleft())
             time.sleep(0.5)
+    def initialize(self):
+        global CLIENT
+        if self.sPublicKey is None:
+            self.sendPacket(protocol.EPACKET(EPID=protocol.EPACKET_TYPE.HSH_CL_ASK, EPDATA=CLIENT.privKey.getPublicKey().dump().encode()))
+        else:
+            self.sendPacket(protocol.EPACKET(EPID=protocol.EPACKET_TYPE.HSH_CL_SIMPLE, EPDATA=self.sPublicKey.encrypt(CLIENT.privKey.getPublicKey().dump())))
     def handleSinglePacket(self, packet):
         # TODO: Implement
         print(packet.EPID, packet.EPLEN, packet.EPDATA)
-        #if self.sPublicKey is None:
-            #if packet.EPID == protocol.EPACKET_TYPE.HSH_SRV_ANS:
-                ## TODO: Verify
-                #self.sPublicKey = RSA.PublicKey.load(packet.EPDATA.decode())
-                #self.sendPacket(protocol.EPACKET(EPID=protocol.EPACKET_TYPE.HSH_SRV_ANS, EPDATA=self.clPublicKey.encrypt(SERVER.privKey.getPublicKey.dump())))
-            #elif packet.EPID == protocol.EPACKET_TYPE.HSH_CL_SIMPLE:
-                ## TODO: Verify again
-                #self.clPublicKey = RSA.PublicKey.load(SERVER.privKey.decrypt(packet.EPDATA).decode())
-                #self.challenge = hashlib.md5(utils.randomBytes(16)).digest()
-                #self.sendPacket(protocol.EPACKET(EPID=protocol.EPACKET_TYPE.HSH_VER_ASK, EPDATA=self.clPublicKey.encrypt(self.challenge)))
-            #else:
-                ## TODO: Quit this guy!
-                #self.connection_lost()
-        #elif not self.clPublicKeyVerified:
-            #if packet.EPID == protocol.EPACKET_TYPE.HSH_VER_ANS:
-                ## TODO: And again
-                #if hashlib.sha256(self.challenge).digest() == SERVER.privKey.decrypt(packet.EPDATA):
-                    #self.clPublicKeyVerified = True
-                #else:
-                    ## TODO: Quit this guy!
-                    #self.connection_lost()
-            #else:
-                ## TODO: Quit this guy!
-                #self.connection_lost()
-        #else:
-            ## TODO: Normal packet handling
-            #self.handleSPacket(protocol.SPACKET.parse(SERVER.privKey.decrypt(packet.EPDATA)))
+        if self.sPublicKey is None:
+            if packet.EPID == protocol.EPACKET_TYPE.HSH_SRV_ANS:
+                # TODO: Verify
+                self.sPublicKey = RSA.PublicKey.load(packet.EPDATA.decode())
+            else:
+                # TODO: Quit this guy!
+                self.connection_lost()
+        elif not self.verified:
+            if packet.EPID == protocol.EPACKET_TYPE.HSH_VER_ASK:
+                # TODO: And again
+                self.sendPacket(protocol.EPACKET(EPID=protocol.EPACKET_TYPE.HSH_VER_ANS, EPDATA=self.sPublicKey.encrypt(hashlib.sha256(CLIENT.privKey.decrypt(packet.EPDATA)).digest())))
+                self.verified = True
+            else:
+                # TODO: Quit this guy!
+                self.connection_lost()
+        else:
+            # TODO: Normal packet handling
+            self.handleSPacket(protocol.SPACKET.parse(CLIENT.privKey.decrypt(packet.EPDATA)))
+    def handleSPacket(self, packet):
+        # TODO: Implement
+        pass
     def data_received(self, data):
         self.recvBuf += data
         result = protocol.EPACKET.parse(self.recvBuf)
