@@ -1,4 +1,5 @@
 from . import utils
+from . import config
 from enum import Enum
 __DEBUG__ = ("test", 1)
 

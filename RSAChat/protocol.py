@@ -1,4 +1,5 @@
 # TODO: verify tons of stuff!!!!
+# TODO: verify getting the right type of key
 
 from . import utils
 from enum import Enum
@@ -8,7 +9,7 @@ from . import RSA
 import hashlib
 
 
-class EPACKET_TYPE(Enum):
+class EPACKET_TYPE: # Inheritance from Enum?
     REGULAR = 0
     HSH_CL_ASK = 1
     HSH_SRV_ANS = 2
@@ -56,7 +57,7 @@ class BasePacket:
         return result
     
     @classmethod
-    def parse(cls, buf):
+    def _parse(cls, buf):
         # TODO: More verification
         result = cls()
         ptr = 0
@@ -105,6 +106,10 @@ class EPACKET(BasePacket):
         assert self.EPID == EPACKET_TYPE.REGULAR
         key = RSA.loadKey(key)
         return SPACKET.parse(key.decrypt(self.EPDATA))
+    
+    @classmethod
+    def parse(cls, buf):
+        return cls._parse(buf)
 
 
 class SPACKET(BasePacket):
@@ -122,6 +127,13 @@ class SPACKET(BasePacket):
         assert self.isComplete()
         key = RSA.loadKey(key)
         return PPACKET.parse(key.decrypt(self.SPDATA))[1], RSA.loadKey(self.SPKEY.decode())
+    
+    @classmethod
+    def parse(cls, buf):
+        ptr, packet = cls._parse(buf)
+        if ptr < len(buf):
+            utils.raiseException("protocol.SPACKET.parse", "Buf contains extra information")
+        return packet
         
 
 
@@ -147,7 +159,13 @@ class PPACKET(BasePacket):
     def verify(self, replyTo):
         utils.checkParamTypes("protocol.PPACKET.verify", [replyTo], [{bytes, str, RSA.PublicKey}])
         assert self.isComplete()
-        replyTo = RSA.loadKey(replyTo)        
+        replyTo = RSA.loadKey(replyTo)
         return replyTo.verify(self.HASH) == hashlib.sha256(self.salt + self.MSG + self.TIME.to_bytes(4, "big")).digest()
-
+    
+    @classmethod
+    def parse(cls, buf):
+        ptr, packet = cls._parse(buf)
+        if ptr < len(buf):
+            utils.raiseException("protocol.PPACKET.parse", "Buf contains extra information")
+        return packet    
 

@@ -15,7 +15,9 @@ class PublicKey:
         self.blockLen = int(math.log(self.n, 256))  # One of those if FF padding
     
     def encrypt(self, msg):
-        utils.checkParamTypes("RSA.PublicKey.encrypt", [msg], [{bytes}])
+        utils.checkParamTypes("RSA.PublicKey.encrypt", [msg], [{bytes, str}])
+        if isinstance(msg, str):
+            msg = msg.encode()
         padAmount = (-len(msg)) % (self.blockLen - 1)
         #msg = b'\x00' * ((-len(msg)) % (self.blockLen - 1)) + msg  # ?
         encrypted = 1
@@ -24,7 +26,9 @@ class PublicKey:
         return utils.int2bytes(encrypted)
     
     def verify(self, msg):
-        utils.checkParamTypes("RSA.PublicKey.verify", [msg], [{bytes}])
+        utils.checkParamTypes("RSA.PublicKey.verify", [msg], [{bytes, str}])
+        if isinstance(msg, str):
+            msg = msg.encode()
         return PrivateKey(self.n, -1, self.e).decrypt(msg)
         #msg = int.from_bytes(msg, "big")
         #if msg >= self.n:
@@ -57,6 +61,12 @@ class PublicKey:
             return PublicKey(n, e)
         except:
             utils.raiseException("RSA.PublicKey.load", "keyStr is not a valid AbelRSA Public Key")
+    
+    def __eq__(self, other):
+        if isinstance(other, self.__class__):
+            return self.n == other.n and self.e == other.e
+        else:
+            return False
 
 
 class PrivateKey:
@@ -75,7 +85,9 @@ class PrivateKey:
         return utils.int2bytes(pow(msg, self.d, self.n))[1:]
     
     def decrypt(self, msg):
-        utils.checkParamTypes("RSA.PrivateKey.decrypt", [msg], [{bytes}])
+        utils.checkParamTypes("RSA.PrivateKey.decrypt", [msg], [{bytes, str}])
+        if isinstance(msg, str):
+            msg = msg.encode()        
         msg = int.from_bytes(msg, "big")
         decrypted = b''
         while msg > 0:
@@ -84,7 +96,9 @@ class PrivateKey:
         return decrypted
     
     def sign(self, msg):
-        utils.checkParamTypes("RSA.PrivateKey.sign", [msg], [{bytes}])
+        utils.checkParamTypes("RSA.PrivateKey.sign", [msg], [{bytes, str}])
+        if isinstance(msg, str):
+            msg = msg.encode()        
         return PublicKey(self.n, self.d).encrypt(msg)
         #msg = b"\xff" + msg
         #msg = int.from_bytes(msg, "big")
@@ -114,6 +128,12 @@ class PrivateKey:
     
     def getPublicKey(self):
         return PublicKey(self.n, self.e)
+    
+    def __eq__(self, other):
+        if isinstance(other, self.__class__):
+            return self.n == other.n and self.e == other.e and self.d == other.d
+        else:
+            return False    
 
 
 def genKeyPair(length=1024, custom_e=None):
