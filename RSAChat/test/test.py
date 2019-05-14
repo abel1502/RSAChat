@@ -4,6 +4,7 @@ def tmain():
     from .. import credentials
     from .. import RSA
     from .. import network
+    import time
     #print(protocol._EPACKET.parse(b'\x01\x00\x00\x0eThis is EPDATA')[1].EPDATA)
     #print(protocol._EPACKET(EPID=1, EPDATA=b'This is EPDATA').encode())
     #print(protocol.SPACKET.parse(b'\x00\x0eThis is SPDATA\x00\x0dThis is SPKEYsaltsaltsaltsalt')[1].fields)
@@ -24,6 +25,7 @@ def tmain():
     network.Server(privKey=key1)
     network.Client(host="localhost", privKey=key2)
     
+    time.sleep(5)
     network.CLIENT.aioClient[1].sendMsg("Hello, I guess?)... <[Randomness4security]>", pKey2)  # Probably add third key as the other client
     
     #from .. import utils
