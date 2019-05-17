@@ -42,36 +42,39 @@ class ServerProtocol(asyncio.Protocol):
         self.transport = transport
         self.recvBuf = b''
         #self.curPacket = protocol.EPACKET()
-        self.packets = deque()
+        #self.packets = deque()
         self.clPublicKey = None
         self.clPublicKeyVerified = False
         global SERVER
         SERVER.clients.append(self)
-        self.mainThread = utils.Thread(target=self.handlePackets)
-        self.mainThread.start()
+        #self.mainThread = utils.Thread(target=self.handlePackets)
+        #self.mainThread.start()
+        self.processing = False
     def sendPacket(self, packet):
         # TODO: Temporary?
         utils.checkParamTypes("network.ServerProtocol.sendPacket", [packet], [{protocol.EPACKET}])
         print("[S SENDING]", packet)
         self.transport.write(packet.encode())
-    def handlePackets(self):
-        global SENDBUF
-        while not self.mainThread.stopped():
-            if self.clPublicKeyVerified and len(SENDBUF[self.clPublicKey.dump()]) > 0:
-                self.sendPacket(protocol.EPACKET(EPID=protocol.EPACKET_TYPE.REGULAR, EPDATA=self.clPublicKey.encrypt(SENDBUF[self.clPublicKey.dump()].popleft())))
-            if len(self.packets) > 0:
-                print(self.packets[0])
-                self.handleSinglePacket(self.packets.popleft())
-            time.sleep(0.5)
+    #def handlePackets(self):
+        #global SENDBUF
+        #while not self.mainThread.stopped():
+            #if self.clPublicKeyVerified and len(SENDBUF[self.clPublicKey.dump()]) > 0:
+                #self.sendPacket(protocol.EPACKET(EPID=protocol.EPACKET_TYPE.REGULAR, EPDATA=self.clPublicKey.encrypt(SENDBUF[self.clPublicKey.dump()].popleft())))
+            #if len(self.packets) > 0:
+                #print(self.packets[0])
+                #self.handleSinglePacket(self.packets.popleft())
+            #time.sleep(0.5)
     def handleSinglePacket(self, packet):
         # TODO: Implement
-        print("[*S]", packet.EPID, packet.EPDATA)
+        print("[S RECEIVED]", packet)
         global SERVER
         if self.clPublicKey is None:
             if packet.EPID == protocol.EPACKET_TYPE.HSH_CL_ASK:
                 # TODO: Verify
                 self.clPublicKey = RSA.PublicKey.load(packet.EPDATA.decode())
                 self.sendPacket(protocol.EPACKET(EPID=protocol.EPACKET_TYPE.HSH_SRV_ANS, EPDATA=self.clPublicKey.encrypt(SERVER.privKey.getPublicKey().dump())))
+                self.challenge = hashlib.md5(utils.randomBytes(16)).digest()
+                self.sendPacket(protocol.EPACKET(EPID=protocol.EPACKET_TYPE.HSH_VER_ASK, EPDATA=self.clPublicKey.encrypt(self.challenge)))                
             elif packet.EPID == protocol.EPACKET_TYPE.HSH_CL_SIMPLE:
                 # TODO: Verify again
                 self.clPublicKey = RSA.PublicKey.load(SERVER.privKey.decrypt(packet.EPDATA).decode())
@@ -104,20 +107,17 @@ class ServerProtocol(asyncio.Protocol):
         global SENDBUF
         SENDBUF[key] = packet
     def data_received(self, data):
-        #print('[*]', data)
+        print('[*]', data)
+        while self.processing:
+            pass
+        self.processing = True
         self.recvBuf += data
-        print("[S RECEIVED]", data)
         result = protocol.EPACKET.parse(self.recvBuf)
         while result is not None:
             self.recvBuf = self.recvBuf[result[0]:]
-            self.packets.append(result[1])
+            self.handleSinglePacket(result[1])
             result = protocol.EPACKET.parse(self.recvBuf)
-        #self.recvBuf += data
-        #self.recvBuf, success = self.curPacket.parse(self.recvBuf)
-        #while success:
-            #self.packets.append(self.curPacket)
-            #self.curPacket = protocol.EPACKET()
-            #self.recvBuf, success = self.curPacket.parse(self.recvBuf)
+        #self.processing = False
     def connection_lost(self, exc=None):
         print("[S] Disconnect")
         self.mainThread.stop()
@@ -152,7 +152,7 @@ class ClientProtocol(asyncio.Protocol):
     def connection_made(self, transport):
         self.transport = transport
         self.recvBuf = b''
-        self.packets = deque()
+        #self.packets = deque()
         # The first doesn't work, for some reason
         global CLIENT
         #CLIENT.protocol = self
@@ -161,8 +161,9 @@ class ClientProtocol(asyncio.Protocol):
         self.sPublicKey = CLIENT.sKey
         self.verified = False
         self.initialize()
-        self.mainThread = utils.Thread(target=self.handlePackets)
-        self.mainThread.start()
+        self.processing = False
+        #self.mainThread = utils.Thread(target=self.handlePackets)
+        #self.mainThread.start()
     def sendMsg(self, msg, to): # TODO: timestamp?
         utils.checkParamTypes("network.ClientProtocol.sendMsg", [msg, to], [{str, bytes}, {bytes, str, RSA.PublicKey}])
         if isinstance(msg, bytes):
@@ -176,11 +177,11 @@ class ClientProtocol(asyncio.Protocol):
         utils.checkParamTypes("network.ClientProtocol.sendPacket", [packet], [{protocol.EPACKET}])
         print("[CL SENDING]", packet)
         self.transport.write(packet.encode())
-    def handlePackets(self):
-        while not self.mainThread.stopped():
-            if len(self.packets) > 0:
-                self.handleSinglePacket(self.packets.popleft())
-            time.sleep(0.5)
+    #def handlePackets(self):
+        #while not self.mainThread.stopped():
+            #if len(self.packets) > 0:
+                #self.handleSinglePacket(self.packets.popleft())
+            #time.sleep(0.5)
     def initialize(self):
         global CLIENT
         if self.sPublicKey is None:
@@ -189,12 +190,11 @@ class ClientProtocol(asyncio.Protocol):
             self.sendPacket(protocol.EPACKET(EPID=protocol.EPACKET_TYPE.HSH_CL_SIMPLE, EPDATA=self.sPublicKey.encrypt(CLIENT.privKey.getPublicKey().dump())))
     def handleSinglePacket(self, packet):
         # TODO: Implement
-        print("[CL]", packet.EPID, packet.EPLEN, packet.EPDATA)
+        print("[CL RECEIVED]", packet)
         if self.sPublicKey is None:
             if packet.EPID == protocol.EPACKET_TYPE.HSH_SRV_ANS:
                 # TODO: Verify
-                self.sPublicKey = RSA.PublicKey.load(packet.EPDATA.decode())
-                print(self.sPublicKey)
+                self.sPublicKey = RSA.PublicKey.load(CLIENT.privKey.decrypt(packet.EPDATA).decode())
             else:
                 # TODO: Quit this guy!
                 self.connection_lost()
@@ -219,14 +219,17 @@ class ClientProtocol(asyncio.Protocol):
         assert packet.verify(replyTo)
         messaging.INCOMING_QUEUE.append(messaging.Message(packet))
     def data_received(self, data):
+        while self.processing:
+            pass
+        self.processing = True
         self.recvBuf += data
-        print("[CL RECEIVED]", data)
         result = protocol.EPACKET.parse(self.recvBuf)
         while result is not None:
             self.recvBuf = self.recvBuf[result[0]:]
-            self.packets.append(result[1])
+            self.handleSinglePacket(result[1])
             result = protocol.EPACKET.parse(self.recvBuf)
+        self.processing = False
     def connection_lost(self, exc=None):
         print("[C] Disconnect")
-        self.mainThread.stop()
+        #self.mainThread.stop()
         self.transport.close()

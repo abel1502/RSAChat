@@ -27,6 +27,7 @@ def tmain():
     
     time.sleep(5)
     network.CLIENT.aioClient[1].sendMsg("Hello, I guess?)... <[Randomness4security]>", pKey2)  # Probably add third key as the other client
+    time.sleep(5)
     
     #from .. import utils
     #from .. import network
