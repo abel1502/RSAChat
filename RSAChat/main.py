@@ -1,7 +1,7 @@
 from . import utils
 from . import config
 from enum import Enum
-__DEBUG__ = ("test", 1)
+__DEBUG__ = ("test", 2)
 
 class MODE(Enum):
     SERVER = 0
