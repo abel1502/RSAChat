@@ -7,6 +7,26 @@ from . import config
 DEFAULT_E = config.get("Crypto", "Default_E", 65537, int)
 
 
+def egcd(a, b):
+    # Extended Euclid's algorithm
+    if b == 0:
+        return (1, 0, a)
+    x1, y1, g = egcd(b, a % b)
+    return (y1, x1 - (a // b) * y1, g)
+
+
+def modularInverse(n, p):
+    # Modular inverse of n by modulo p
+    m, k, g = egcd(n, p)
+    if g != 1:
+        raise Exception("utils.modularInverse", "GCD(n, p) != 1")
+    k = -k
+    while m < 0:
+        m += p
+        k += n
+    return m
+
+
 class PublicKey:
     def __init__(self, n, e):
         utils.checkParamTypes("RSA.PublicKey", (n, e), ({int}, {int}))

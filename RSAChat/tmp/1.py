@@ -92,6 +92,10 @@ class ClientHandshakeProtocol(BaseBlockingProtocol):
 
 
 class ServTCPHandler(socketserver.StreamRequestHandler):
+    def __init__(self, aServerKey, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.serverKey = aServerKey
+    
     def recv(self, n):
         lBuf = b''
         while n - len(lBuf) > 0:
@@ -115,8 +119,7 @@ class ServTCPHandler(socketserver.StreamRequestHandler):
         lLoop.close()
     
     def doHandshake(self):
-        # !!Server key
-        lHshP = ServerHandshakeProtocol(self.send, self.recv, None)
+        lHshP = ServerHandshakeProtocol(self.send, self.recv, self.serverKey)
         self.clientPKey = lHshP.execute()
 
 
@@ -151,6 +154,6 @@ class ServLoopHandler(asyncio.Protocol):
         self.transport.close()
 
 
-with socketserver.ThreadingTCPServer(("", 8080), ServTCPHandler) as serv:
+with socketserver.ThreadingTCPServer(("", 8080), lambda *args, **kwargs: ServTCPHandler(se, *args, **kwargs)) as serv:
     serv.serve_forever()
     #serv.shutdown()
