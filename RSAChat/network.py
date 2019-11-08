@@ -97,7 +97,7 @@ class ServerProtocol(asyncio.Protocol):
             self.recvBuf = self.recvBuf[result[0]:]
             self.handleSinglePacket(result[1])
             result = protocol.EPACKET.parse(self.recvBuf)
-        #self.processing = False
+        self.processing = False
     def connection_lost(self, exc=None):
         print("[S] Disconnect")
         if self.clPublicKeyVerified:

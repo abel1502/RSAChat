@@ -1,15 +1,15 @@
 ====================================
-HSH_CL_ASK_PACKET
+HSH_CL_ASK
 ==
 > CL_PKEY (PublicKey, 2v) : Client's public key, dumped (TODO: encoded)
     plain
 ====================================
-HSH_SRV_ANS_PACKET
+HSH_SRV_ANS
 ==
 > S_PKEY (bytes, 2v) : Server's public key, dumped (TODO: encoded)
     x Client's public key
 ====================================
-HSH_CL_SIMPLE_PACKET
+HSH_CL_SIMPLE
 ==
 > CL_PKEY (bytes, 2v) : Client's public key, dumped (TODO: encoded)
     x Server's public key
