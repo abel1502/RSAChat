@@ -7,6 +7,7 @@ import configparser
 import os
 import threading
 import time
+from . import RSA
 
 
 def checkParamTypes(source, args, types):
@@ -135,6 +136,19 @@ def randomBytes(length):
 #def unpad(data):
     #length = data[0]
     #return data[length:]
+
+
+def loadRSAKey(encKey, PRIV=False, PUB=False):
+    # Not Implemented
+    lKey = encKey
+    if isinstance(encKey, bytes):
+        lKey = lKey.decode()
+    if isinstance(lKey, str):
+        lKey = RSA.Key.load(lKey)
+    
+    if (lKey.isPub() and PUB) or (lKey.isPriv() and PRIV):
+        return lKey
+    assert False
 
 
 class Buffer:
