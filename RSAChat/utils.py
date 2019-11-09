@@ -102,10 +102,6 @@ class IniParser:
             self.parser.write(f)
 
 
-def exit():
-    time.sleep(2)  # So that all threads can finish?...
-
-
 class Thread(threading.Thread):
     """https://stackoverflow.com/questions/323972/is-there-any-way-to-kill-a-thread"""
     def __init__(self, *args, **kwargs):
@@ -139,7 +135,6 @@ def randomBytes(length):
 
 
 def loadRSAKey(encKey, PRIV=False, PUB=False):
-    # Not Implemented
     lKey = encKey
     if isinstance(encKey, bytes):
         lKey = lKey.decode()
@@ -148,6 +143,13 @@ def loadRSAKey(encKey, PRIV=False, PUB=False):
     
     if (lKey.isPub() and PUB) or (lKey.isPriv() and PRIV):
         return lKey
+    assert False
+
+
+def dumpRSAKey(key, PRIV=False, PUB=False):
+    key = loadRSAKey(key, PRIV, PUB)
+    if (key.isPub() and PUB) or (key.isPriv() and PRIV):
+        return key.dump()
     assert False
 
 
@@ -163,7 +165,8 @@ class Buffer:
 
     def get(self, size):
         self._lock.acquire()
-        data = self._buf[:size]
+        assert len(self) >= size
+        data = bytes(self._buf[:size])
         self._buf[:size] = b''
         self._lock.release()
         return data

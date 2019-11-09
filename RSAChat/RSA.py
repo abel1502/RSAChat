@@ -4,9 +4,10 @@ import base64
 import os
 from enum import Enum
 import hashlib
-from . import config
+#from . import config
 
-DEFAULT_E = config.get("Crypto", "Default_E", 65537, int)
+#DEFAULT_E = config.get("Crypto", "Default_E", 65537, int)
+DEFAULT_E = 65537
 
 
 def egcd(a, b):
@@ -39,10 +40,10 @@ class Key:
         self.fields = {}
         self.fields["n"] = n
         self.fields["e"] = e
-        self.type = Key.Pub
+        self.type = KeyType.Pub
         if d is not None:
             self.fields["d"] = d
-            self.type = Key.Priv
+            self.type = KeyType.Priv
         self.blockLen = int(math.log(self.fields["n"], 256))  # One of those if FF padding
     
     def _apply(self, data, exp):
@@ -59,10 +60,10 @@ class Key:
     
     def encrypt(self, data, exp="e"):
         # Data must be bytes (or bytearray?)... ?
-        lRes = 1
         padAmount = (-len(data)) % (self.blockLen - 1)
-        lDataBuf = utils.Buffer(b"\x00" * padAmount)
-        lDataBuf.put(data)
+        lDataBuf = utils.Buffer(data)
+        lFirstBlock = self.pad(lDataBuf.get(self.blockLen - 1 - padAmount))
+        lRes = int.from_bytes(self._apply(lFirstBlock, exp), "big")
         while len(lDataBuf) > 0:
             lRes = lRes * self.fields["n"] + int.from_bytes(self._apply(self.pad(lDataBuf.get(self.blockLen - 1)), exp), "big")
         return utils.int2bytes(lRes)
@@ -70,10 +71,10 @@ class Key:
     def decrypt(self, data, exp="d"):
         data = int.from_bytes(data, "big")
         lRes = []
-        while data > 1:
-            lRes.append(self._apply(self.unpad(utils.int2bytes(data % self.fields["n"])), exp))
-            data //= self.n
-        return lRes
+        while data > 0:
+            lRes.append(self.unpad(self._apply(utils.int2bytes(data % self.fields["n"]), exp)))
+            data //= self.fields["n"]
+        return b"".join(lRes[::-1])
     
     def sign(self, data, hasher=hashlib.sha256):
         lHash = hasher(data).digest()
@@ -92,9 +93,9 @@ class Key:
         assert args[0] == args[-1] == ""
         args = args[1:-1]
         if args[0] == "PUB" and len(args) == 3:
-            return Key(args[1], args[2]))
+            return Key(_dec(args[1]), _dec(args[2]))
         elif args[0] == "PRIV" and len(args) == 4:
-            return Key(args[1], args[2], args[3]))
+            return Key(_dec(args[1]), _dec(args[2]), _dec(args[3]))
         else:
             assert False
     
@@ -113,7 +114,7 @@ class Key:
     
     def getPublicKey(self):
         assert self.isPriv  # ?
-        return Key(self.n, self.e)
+        return Key(self.fields["n"], self.fields["e"])
     
     def __eq__(self, other):
         return type(self) is type(other) and self.type is other.type and self.fields == other.fields

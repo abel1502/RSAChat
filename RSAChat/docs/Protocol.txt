@@ -1,7 +1,12 @@
 ====================================
+V_INFO
+==
+> VERSION (int, 1) : Protocol version
+    plain
+====================================
 HSH_CL_ASK
 ==
-> CL_PKEY (PublicKey, 2v) : Client's public key, dumped (TODO: encoded)
+> CL_PKEY (bytes, 2v) : Client's public key, dumped (TODO: encoded)
     plain
 ====================================
 HSH_SRV_ANS
@@ -23,4 +28,8 @@ HSH_VER_ANS
 ==
 > SOLUTION (bytes, 2v) : Sha256(challenge)
     x Server's public key
+====================================
+REGULAR
+==
+...
 ====================================
