@@ -24,7 +24,7 @@ class ServTCPHandler(socketserver.StreamRequestHandler):
         self.wfile.write(data)
     
     def handle(self):
-        print("Connection from {0[0]}:{0[1]}".format(self.request.getpeername()))
+        utils.log("Connection from {0[0]}:{0[1]}".format(self.request.getpeername()))
         # TODO: Timeout and check for shutdown?
         
         lClientPKey = self.doHandshake()
@@ -48,7 +48,7 @@ class ServLoopHandler(asyncio.Protocol):
         super().__init__(*args, **kwargs)
     
     def connection_made(self, transport):
-        print("General phase")
+        utils.log("General phase")
         self.transport = transport
         self.recvBuf = utils.Buffer()
         self.sendBuf = utils.Buffer()
@@ -68,11 +68,11 @@ class ServLoopHandler(asyncio.Protocol):
         self._send(self.sendBuf.getAll())
     
     def data_received(self, data):
-        print('[*]', data)
+        utils.log('[*]', data)
         self.buf.put(data)
         
     def connection_lost(self, exc=None):
-        print("Disconnect")
+        utils.log("Disconnect")
         # Needed?
         self.transport.close()
 
@@ -84,7 +84,7 @@ class ClientLoopHandler(asyncio.Protocol):
         super().__init__(*args, **kwargs)
     
     def connection_made(self, transport):
-        print("Connected to server")
+        utils.log("Connected to {0[0]}:{0[1]}".format(transport._sock.getpeername()))
         self.transport = transport
         self.recvBuf = utils.Buffer()
         self.sendBuf = utils.Buffer()
@@ -104,18 +104,18 @@ class ClientLoopHandler(asyncio.Protocol):
         self._send(self.sendBuf.getAll())
     
     def data_received(self, data):
-        print('[*]', data)
+        utils.log('[*]', data)
         self.buf.put(data)
         
     def connection_lost(self, exc=None):
-        print("Disconnect")
+        utils.log("Disconnect")
         # Needed?
         self.transport.close()
 
 
 def start_server(host="", port=8887, aServerKey=None):
     serverKey = utils.loadRSAKey(aServerKey, PRIV=True) if aServerKey is not None else RSA.genKeyPair()[1]
-    with socketserver.ThreadingTCPServer((host, port), lambda *args, **kwargs: ServTCPHandler(serverKey, *args, **kwargs)) as serv:
+    with socketserver.ThreadingTCPServer((host, port), (lambda *args, **kwargs: ServTCPHandler(serverKey, *args, **kwargs))) as serv:
         serv.serve_forever()
 
 

@@ -179,3 +179,8 @@ class Buffer:
 
     def __len__(self):
         return len(self._buf)
+
+
+def log(data):
+    print(data)
+    sys.stdout.flush()
