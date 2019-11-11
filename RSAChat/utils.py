@@ -153,19 +153,28 @@ def dumpRSAKey(key, PRIV=False, PUB=False):
     assert False
 
 
+class NotEnoughDataException(Exception):
+    pass
+
+
 class Buffer:
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, blocking=False, **kwargs):
         self._buf = bytearray(*args, **kwargs)
+        self.blocking = blocking
         self._lock = Lock()  # Non-blocking? Timeout?
 
     def put(self, data):
-        self._lock.acquire()
+        #self._lock.acquire()
         self._buf.extend(data)
-        self._lock.release()
+        #self._lock.release()
 
     def get(self, size):
+        #self._lock.acquire()
+        while self.blocking and len(self) < size:
+            pass
+        if len(self) < size:
+            raise NotEnoughDataException()
         self._lock.acquire()
-        assert len(self) >= size
         data = bytes(self._buf[:size])
         self._buf[:size] = b''
         self._lock.release()
@@ -181,6 +190,6 @@ class Buffer:
         return len(self._buf)
 
 
-def log(data):
-    print(data)
+def log(*data):
+    print(*data)
     sys.stdout.flush()

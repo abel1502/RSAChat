@@ -2,6 +2,7 @@ import socket
 import socketserver
 import asyncio
 import hashlib
+from collections import deque
 import time
 from . import utils
 from . import protocol
@@ -9,9 +10,37 @@ from . import RSA
 from . import messaging
 
 
-class ServTCPHandler(socketserver.StreamRequestHandler):
-    def __init__(self, aServerKey, *args, **kwargs):
+class RoutingTable(dict):
+    def initialize(self, key):
+        if key in self:
+            return
+        self[key] = deque()
+    
+    def put(self, key, value):
+        self.initialize(key)  # ?
+        self[key].append(value)
+    
+    def get(self, key, blocking=False):
+        lQueue = self[key]
+        while blocking and len(lQueue) == 0:
+            pass
+        if len(lQueue) == 0:
+            raise utils.NotEnoughDataException()
+        return lQueue.popleft()
+    
+    def len(self, key):
+        return len(self[key])  # ?
+    
+    def clear(self, key):
+        # ? Delete or make blank?
+        if key in self:
+            del self[key]
+
+
+class ServerInitialHandler(socketserver.StreamRequestHandler):
+    def __init__(self, aServerKey, aRoutingTable, *args, **kwargs):
         self.serverKey = aServerKey
+        self.routingTable = aRoutingTable
         super().__init__(*args, **kwargs)
     
     def recv(self, n):
@@ -27,96 +56,138 @@ class ServTCPHandler(socketserver.StreamRequestHandler):
         utils.log("Connection from {0[0]}:{0[1]}".format(self.request.getpeername()))
         # TODO: Timeout and check for shutdown?
         
-        lClientPKey = self.doHandshake()
+        lHshP = protocol.ServerHandshakeProtocol(self.send, self.recv, self.serverKey)
+        lClientPKey = lHshP.execute()
+        
         lLoop = asyncio.new_event_loop() # ?
-        lTransport, lProtocol = lLoop.run_until_complete(lLoop.connect_accepted_socket(lambda *args, **kwargs: ServLoopHandler(self.serverKey, lClientPKey, *args, **kwargs), self.request))
+        lTransport, lServerGeneralProtocol = lLoop.run_until_complete(lLoop.connect_accepted_socket(lambda *args, **kwargs: ServerGeneralProtocol(lLoop, self.serverKey, lClientPKey, self.routingTable, *args, **kwargs), self.request))
         try:
-            lLoop.run_forever()
+            lLoop.run_until_complete(lServerGeneralProtocol.disconnected)
         except KeyboardInterrupt:
             pass
-        lLoop.close()
-    
-    def doHandshake(self):
-        lHshP = protocol.ServerHandshakeProtocol(self.send, self.recv, self.serverKey)
-        return lHshP.execute()
+        finally:
+            lTransport.close()
+            lLoop.close()
 
 
-class ServLoopHandler(asyncio.Protocol):
-    def __init__(self, aServerKey, aClientPKey, *args, **kwargs):
-        self.serverKey = aServerKey
-        self.clientPKey = aClientPKey
+class BaseGeneralProtocol(asyncio.Protocol):
+    def __init__(self, aLoop, aSelfKey, aOtherPKey, *args, **kwargs):
+        self.selfKey = aSelfKey
+        self.otherPKey = aOtherPKey
+        # ? Got to be awaited/executed in loop
+        asyncio.gather(*[self.__getattribute__(i)() for i in dir(self) if i.startswith("background_")], loop=aLoop)
+        self.connected = aLoop.create_future()
+        self.disconnected = aLoop.create_future()
         super().__init__(*args, **kwargs)
+    
+    def connection_made(self, transport):
+        self.transport = transport
+        self.recvBuf = utils.Buffer()
+        self.connected.set_result(True)
+    
+    def send(self, data):  # add some form of awaiting?
+        #utils.log("[->]", data)
+        self.transport.write(data)
+    
+    def recv(self, n):
+        return self.recvBuf.get(n)
+    
+    def data_received(self, data):
+        #utils.log('[<-]', data)
+        self.recvBuf.put(data)
+        
+    def connection_lost(self, exc=None):
+        self.transport.close()  # ?
+        self.disconnected.set_result(True)
+
+
+class ServerGeneralProtocol(BaseGeneralProtocol):
+    def __init__(self, aLoop, aSelfKey, aOtherPKey, aRoutingTable, *args, **kwargs):
+        self.routingTable = aRoutingTable
+        self.routingTable.initialize(aOtherPKey)
+        super().__init__(aLoop, aSelfKey, aOtherPKey, *args, **kwargs)
     
     def connection_made(self, transport):
         utils.log("General phase")
-        self.transport = transport
-        self.recvBuf = utils.Buffer()
-        self.sendBuf = utils.Buffer()
+        super().connection_made(transport)
     
-    def _send(self, data):
-        self.transport.sendall(data)
+    async def background_incoming(self):
+        await self.connected
+        while True:
+            #utils.log("Server in")
+            await asyncio.sleep(0)
+            try:
+                lEPacket = protocol.REGULAR_PACKET.receive(self.recv)
+            except utils.NotEnoughDataException:
+                continue
+            lSPacket = lEPacket.get_EPDATA(self.selfKey)
+            lRecepient = lSPacket.get_SPKEY()
+            lSPacket.SPKEY = utils.dumpRSAKey(self.otherPKey, PUB=True).encode()
+            self.routingTable.put(lRecepient, lSPacket)
     
-    def _recv(self, n):
-        if len(self.recvBuf) < n:
-            assert False
-        return self.recvBuf.get(n)
-    
-    def send(self, data):
-        self.sendBuf.put(data)
-    
-    def flush(self):
-        self._send(self.sendBuf.getAll())
-    
-    def data_received(self, data):
-        utils.log('[*]', data)
-        self.buf.put(data)
-        
+    async def background_outgoing(self):
+        await self.connected
+        while True:
+            #utils.log("Server out")
+            await asyncio.sleep(0)
+            try:
+                lSPacket = self.routingTable.get(self.otherPKey)
+            except utils.NotEnoughDataException:
+                continue
+            self.send(protocol.REGULAR_PACKET.build(lSPacket, self.otherPKey).encode())
+
     def connection_lost(self, exc=None):
         utils.log("Disconnect")
-        # Needed?
-        self.transport.close()
+        super().connection_lost(exc=exc)
 
 
-class ClientLoopHandler(asyncio.Protocol):
-    def __init__(self, aClientKey, aServerPKey, *args, **kwargs):
-        self.clientKey = aClientKey
-        self.serverPKey = aServerPKey
-        super().__init__(*args, **kwargs)
-    
+class ClientGeneralProtocol(BaseGeneralProtocol):
     def connection_made(self, transport):
         utils.log("Connected to {0[0]}:{0[1]}".format(transport._sock.getpeername()))
-        self.transport = transport
-        self.recvBuf = utils.Buffer()
-        self.sendBuf = utils.Buffer()
+        super().connection_made(transport)
     
-    def _send(self, data):
-        self.transport.sendall(data)
+    async def background_incoming(self):
+        await self.connected
+        while True:
+            #utils.log("Client in")
+            await asyncio.sleep(0)
+            try:
+                lEPacket = protocol.REGULAR_PACKET.receive(self.recv)
+            except utils.NotEnoughDataException:
+                continue
+            lSPacket = lEPacket.get_EPDATA(self.selfKey)
+            lSender = lSPacket.get_SPKEY()
+            lPPacket = lSPacket.get_SPDATA(self.selfKey)
+            utils.log(lPPacket)
     
-    def _recv(self, n):
-        if len(self.recvBuf) < n:
-            assert False
-        return self.recvBuf.get(n)
-    
-    def send(self, data):
-        self.sendBuf.put(data)
-    
-    def flush(self):
-        self._send(self.sendBuf.getAll())
-    
-    def data_received(self, data):
-        utils.log('[*]', data)
-        self.buf.put(data)
-        
+    async def background_outgoing(self):
+        await self.connected
+        while True:
+            #utils.log("Client out")
+            await asyncio.sleep(0)
+            try:
+                pass # Get msg
+            except utils.NotEnoughDataException:
+                continue
+            lRecepient = self.selfKey.getPublicKey()
+            lMessage = "Hello"
+            lPPacket = protocol.PPACKET.build(lMessage, self.selfKey)
+            lSPacket = protocol.SPACKET.build(lPPacket, lRecepient)
+            lEPacket = protocol.REGULAR_PACKET.build(lSPacket, self.otherPKey)
+            self.send(lEPacket.encode())
+            return
+
     def connection_lost(self, exc=None):
         utils.log("Disconnect")
-        # Needed?
-        self.transport.close()
+        super().connection_lost(exc=exc)
 
 
 def start_server(host="", port=8887, aServerKey=None):
     serverKey = utils.loadRSAKey(aServerKey, PRIV=True) if aServerKey is not None else RSA.genKeyPair()[1]
-    with socketserver.ThreadingTCPServer((host, port), (lambda *args, **kwargs: ServTCPHandler(serverKey, *args, **kwargs))) as serv:
+    routingTable = RoutingTable()
+    with socketserver.ThreadingTCPServer((host, port), (lambda *args, **kwargs: ServerInitialHandler(serverKey, routingTable, *args, **kwargs))) as serv:
         serv.serve_forever()
+    serv.close()  # ?
 
 
 def connect_client(host, port=8887, aClientKey=None, aServerPKey=None):    
@@ -136,9 +207,11 @@ def connect_client(host, port=8887, aClientKey=None, aServerPKey=None):
     lServerPKey = lHshP.execute(aServerPKey)
     
     lLoop = asyncio.get_event_loop() # ?
-    lTransport, lProtocol = lLoop.run_until_complete(lLoop.create_connection(lambda *args, **kwargs: ClientLoopHandler(lClientKey, lServerPKey, *args, **kwargs), sock=lClientSocket))
+    lTransport, lClientGeneralProtocol = lLoop.run_until_complete(lLoop.create_connection(lambda *args, **kwargs: ClientGeneralProtocol(lLoop, lClientKey, lServerPKey, *args, **kwargs), sock=lClientSocket))
     try:
-        lLoop.run_forever()
+        lLoop.run_until_complete(lClientGeneralProtocol.disconnected)
     except KeyboardInterrupt:
         pass
-    lLoop.close()
+    finally:
+        lTransport.close()
+        lLoop.close()

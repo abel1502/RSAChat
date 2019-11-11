@@ -118,6 +118,9 @@ class Key:
     
     def __eq__(self, other):
         return type(self) is type(other) and self.type is other.type and self.fields == other.fields
+    
+    def __hash__(self):
+        return hash(tuple(sorted(self.fields.values())))
 
 
 def genKeyPair(length=1024, custom_e=None):

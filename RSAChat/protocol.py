@@ -1,5 +1,4 @@
-# TODO: verify tons of stuff!!!!
-# TODO: verify getting the right type of key
+# TODO: verify tons of stuff!!
 
 from . import utils
 from enum import Enum
@@ -75,8 +74,8 @@ class BasePacket:
     
     @classmethod
     def parse(cls, buf):
-        buf = Buffer(buf)
-        return self.receive(buf.get)
+        buf = utils.Buffer(buf)
+        return cls.receive(buf.get)
     
     @classmethod
     def receive(cls, receiver):
@@ -199,6 +198,7 @@ class HSH_VER_ANS_PACKET(EPACKET):
         return serverKey.decrypt(self.SOLUTION)
 
 
+# ? Rename all those into ..._EPACKET
 class REGULAR_PACKET(EPACKET):
     structure = [("EPID", int, 1), ("EPDATA", bytes, -3)]
     defaultFields = {"EPID": EPACKET_TYPE.REGULAR, "EPDATA": None}
@@ -225,7 +225,7 @@ class SPACKET(BasePacket):
     @classmethod
     def build(cls, ppacket, recepientPKey):
         recepientPKey = utils.loadRSAKey(recepientPKey, PUB=True)
-        return cls(SPDATA=recepientPKey.encrypt(ppacket.encode()), SPKEY=utils.dumpRSAKey(recepientPKey, PUB=True), salt=hashlib.md5(utils.randomBytes(16)).digest())
+        return cls(SPDATA=recepientPKey.encrypt(ppacket.encode()), SPKEY=utils.dumpRSAKey(recepientPKey, PUB=True).encode(), salt=hashlib.md5(utils.randomBytes(16)).digest())
     
     def get_SPDATA(self, selfKey):
         selfKey = utils.loadRSAKey(selfKey, PRIV=True)
@@ -240,25 +240,22 @@ class PPACKET(BasePacket):
     defaultFields = {"salt": None, "MSG": None, "TIME": None, "HASH":None}
     
     @classmethod
-    def build(cls, msg, key):
-        # TODO: Finish
-        utils.checkParamTypes("protocol.PPACKET.build", [msg, key], [{bytes, str}, {bytes, str, RSA.PrivateKey}])
+    def build(cls, msg, senderKey):
         if isinstance(msg, str):
             msg = msg.encode()
         assert len(msg) < 30000
-        key = RSA.loadKey(key)
-        replyTo = key.getPublicKey()
-        MSG = replyTo.dump().encode() + b'\n' + msg
+        senderKey = utils.loadRSAKey(senderKey, PRIV=True)
+        replyTo = senderKey.getPublicKey()
+        MSG = utils.dumpRSAKey(replyTo, PUB=True).encode() + b'\n' + msg
         salt = hashlib.md5(utils.randomBytes(16)).digest()
         TIME = int(time.time())
-        HASH = key.sign(hashlib.sha256(salt + MSG + TIME.to_bytes(4, "big")).digest())
+        HASH = senderKey.sign(salt + MSG + TIME.to_bytes(4, "big"))
         return cls(MSG=MSG, salt=salt, TIME=TIME, HASH=HASH)
         
     def verify(self, replyTo):
-        utils.checkParamTypes("protocol.PPACKET.verify", [replyTo], [{bytes, str, RSA.PublicKey}])
         assert self.isComplete()
-        replyTo = RSA.loadKey(replyTo)
-        return replyTo.verify(self.HASH) == hashlib.sha256(self.salt + self.MSG + self.TIME.to_bytes(4, "big")).digest()
+        replyTo = utils.loadRSAKey(replyTo)
+        return replyTo.verify(hashlib.sha256(self.salt + self.MSG + self.TIME.to_bytes(4, "big")), self.HASH)
 
 
 class BaseBlockingProtocol:
