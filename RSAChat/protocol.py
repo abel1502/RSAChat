@@ -99,34 +99,45 @@ class BasePacket:
         return "{}({})".format(self.__class__.__name__, ', '.join(map(lambda x: "{}={}".format(x, repr(self.fields[x])), self.fields)))
 
 
+class EPACKET_DATA(BasePacket):
+    id = -1
+    
+    @classmethod
+    def receive(cls, receiver, withID=True):
+        if withID:
+            assert cls.id == int.from_bytes(receiver(1), "big")
+        return super().receive(receiver)
+    
+    def encode(self, withID=True):
+        if withID:
+            return self.id.to_bytes(1, "big") + super().encode()
+        return super().encode()
+
+
 class V_INF_PACKET(BasePacket):
     structure = [("VERSION", int, 1)]
     defaultFields = {"VERSION": VERSION}
 
 
 class EPACKET(BasePacket):
-    structure = [("EPID", int, 1), ("EPDATA", bytes, -3)]
-    defaultFields = {"EPID": None, "EPDATA": None}
-    
-    # ?((
-    types = {}
-    #types = {EPACKET_TYPE.REGULAR: REGULAR_PACKET, EPACKET_TYPE.HSH_CL_ASK: HSH_CL_ASK_PACKET,
-    #               EPACKET_TYPE.HSH_SRV_ANS: HSH_SRV_ANS_PACKET, EPACKET_TYPE.HSH_CL_SIMPLE: HSH_CL_SIMPLE_PACKET,
-    #               EPACKET_TYPE.HSH_VER_ASK: HSH_VER_ASK_PACKET, EPACKET_TYPE.HSH_VER_ANS: HSH_VER_ANS_PACKET}
+    structure = [("EPID", int, 1)]
+    defaultFields = {"EPID": None}
     
     @classmethod
     def receive(cls, receiver):
-        if cls is not EPACKET:
-            return super().receive(receiver)
-        lPacket = super().receive(receiver)
-        lType = cls.types[lPacket.EPID]
-        lDataField = [i for i in lType.defaultFields if i != "EPID"][0]  # ?
-        return lType(**{lDataField: lPacket.EPDATA})
+        EPID = super().receive(receiver).EPID
+        for lType in EPACKET_DATA.__subclasses__():
+            if lType.id == EPID:
+                break
+        else:
+            assert False
+        return lType.receive(receiver, withID=False)
 
 
-class HSH_CL_ASK_PACKET(EPACKET):
-    structure = [("EPID", int, 1), ("CL_PKEY", bytes, -3)]
-    defaultFields = {"EPID": EPACKET_TYPE.HSH_CL_ASK, "CL_PKEY": None}
+class HSH_CL_ASK_PACKET(EPACKET_DATA):
+    id = EPACKET_TYPE.HSH_CL_ASK
+    structure = [("CL_PKEY", bytes, -2)]
+    defaultFields = {"CL_PKEY": None}
     
     @classmethod
     def build(cls, clientPKey):
@@ -137,9 +148,10 @@ class HSH_CL_ASK_PACKET(EPACKET):
         return utils.loadRSAKey(self.CL_PKEY, PUB=True)
 
 
-class HSH_SRV_ANS_PACKET(EPACKET):
-    structure = [("EPID", int, 1), ("S_PKEY", bytes, -3)]
-    defaultFields = {"EPID": EPACKET_TYPE.HSH_SRV_ANS, "S_PKEY": None}
+class HSH_SRV_ANS_PACKET(EPACKET_DATA):
+    id = EPACKET_TYPE.HSH_SRV_ANS
+    structure = [("S_PKEY", bytes, -2)]
+    defaultFields = {"S_PKEY": None}
     
     @classmethod
     def build(cls, serverPKey, clientPKey):
@@ -153,9 +165,10 @@ class HSH_SRV_ANS_PACKET(EPACKET):
         return utils.loadRSAKey(clientKey.decrypt(self.S_PKEY), PUB=True)
 
 
-class HSH_CL_SIMPLE_PACKET(EPACKET):
-    structure = [("EPID", int, 1), ("CL_PKEY", bytes, -3)]
-    defaultFields = {"EPID": EPACKET_TYPE.HSH_CL_SIMPLE, "CL_PKEY": None}
+class HSH_CL_SIMPLE_PACKET(EPACKET_DATA):
+    id = EPACKET_TYPE.HSH_CL_SIMPLE
+    structure = [("CL_PKEY", bytes, -2)]
+    defaultFields = {"CL_PKEY": None}
     
     @classmethod
     def build(cls, clientPKey, serverPKey):
@@ -169,9 +182,10 @@ class HSH_CL_SIMPLE_PACKET(EPACKET):
         return utils.loadRSAKey(serverKey.decrypt(self.CL_PKEY), PUB=True)
 
 
-class HSH_VER_ASK_PACKET(EPACKET):
-    structure = [("EPID", int, 1), ("CHALLENGE", bytes, -3)]
-    defaultFields = {"EPID": EPACKET_TYPE.HSH_VER_ASK, "CHALLENGE": None}
+class HSH_VER_ASK_PACKET(EPACKET_DATA):
+    id = EPACKET_TYPE.HSH_VER_ASK
+    structure = [("CHALLENGE", bytes, -2)]
+    defaultFields = {"CHALLENGE": None}
     
     @classmethod
     def build(cls, challenge, clientPKey):
@@ -184,9 +198,10 @@ class HSH_VER_ASK_PACKET(EPACKET):
         return clientKey.decrypt(self.CHALLENGE)
 
 
-class HSH_VER_ANS_PACKET(EPACKET):
-    structure = [("EPID", int, 1), ("SOLUTION", bytes, -3)]
-    defaultFields = {"EPID": EPACKET_TYPE.HSH_VER_ANS, "SOLUTION": None}
+class HSH_VER_ANS_PACKET(EPACKET_DATA):
+    id = EPACKET_TYPE.HSH_VER_ANS
+    structure = [("SOLUTION", bytes, -2)]
+    defaultFields = {"SOLUTION": None}
     
     @classmethod
     def build(cls, solution, serverPKey):
@@ -199,9 +214,10 @@ class HSH_VER_ANS_PACKET(EPACKET):
         return serverKey.decrypt(self.SOLUTION)
 
 
-class HSH_SID_PACKET(EPACKET):
-    structure = [("EPID", int, 1), ("SID", bytes, -3)]
-    defaultFields = {"EPID": EPACKET_TYPE.HSH_SID, "SID": None}
+class HSH_SID_PACKET(EPACKET_DATA):
+    id = EPACKET_TYPE.HSH_SID
+    structure = [("SID", bytes, -3)]
+    defaultFields = {"SID": None}
     
     @classmethod
     def build(cls, sessionID, otherPKey):
@@ -214,9 +230,10 @@ class HSH_SID_PACKET(EPACKET):
 
 
 # ? Rename all those into ..._EPACKET
-class REGULAR_PACKET(EPACKET):
-    structure = [("EPID", int, 1), ("EPDATA", bytes, -3)]
-    defaultFields = {"EPID": EPACKET_TYPE.REGULAR, "EPDATA": None}
+class REGULAR_PACKET(EPACKET_DATA):
+    id = EPACKET_TYPE.REGULAR
+    structure = [("EPDATA", bytes, -3)]
+    defaultFields = {"EPDATA": None}
     
     @classmethod
     def build(cls, spacket, otherPKey):
@@ -226,12 +243,6 @@ class REGULAR_PACKET(EPACKET):
     def get_EPDATA(self, selfKey):
         selfKey = utils.loadRSAKey(selfKey, PRIV=True)
         return SPACKET.parse(selfKey.decrypt(self.EPDATA))
-
-
-EPACKET.types = {EPACKET_TYPE.REGULAR: REGULAR_PACKET, EPACKET_TYPE.HSH_CL_ASK: HSH_CL_ASK_PACKET,
-                                 EPACKET_TYPE.HSH_SRV_ANS: HSH_SRV_ANS_PACKET, EPACKET_TYPE.HSH_CL_SIMPLE: HSH_CL_SIMPLE_PACKET,
-                                 EPACKET_TYPE.HSH_VER_ASK: HSH_VER_ASK_PACKET, EPACKET_TYPE.HSH_VER_ANS: HSH_VER_ANS_PACKET,
-                                 EPACKET_TYPE.HSH_SID: HSH_SID_PACKET}
 
 
 class SPACKET(BasePacket):
@@ -269,7 +280,7 @@ class PPACKET(BasePacket):
         TIME = int(time.time())
         HASH = senderKey.sign(salt + MSG + TIME.to_bytes(4, "big"))
         return cls(MSG=MSG, salt=salt, TIME=TIME, HASH=HASH)
-        
+    
     def verify(self, replyTo):
         assert self.isComplete()
         replyTo = utils.loadRSAKey(replyTo, PUB=True)
