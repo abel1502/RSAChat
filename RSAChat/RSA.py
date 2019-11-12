@@ -123,10 +123,11 @@ class Key:
         return hash(tuple(sorted(self.fields.values())))
     
     def __str__(self):
-        if self.isPriv():
-            return "Key(n={0[n]}, e={0[e]}, d={0[d]})".format(self.fields)
-        else:
-            return "Key(n={0[n]}, e={0[e]})".format(self.fields)
+        return self.dump()
+        #if self.isPriv():
+        #    return "Key(n={0[n]}, e={0[e]}, d={0[d]})".format(self.fields)
+        #else:
+        #    return "Key(n={0[n]}, e={0[e]})".format(self.fields)
 
 
 def genKeyPair(length=1024, custom_e=None):

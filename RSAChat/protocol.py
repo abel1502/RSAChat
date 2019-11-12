@@ -117,6 +117,15 @@ class EPACKET_DATA(BasePacket):
 class V_INF_PACKET(BasePacket):
     structure = [("VERSION", int, 1)]
     defaultFields = {"VERSION": VERSION}
+    
+    @classmethod
+    def build(cls, overloaded=False):
+        if not overloaded:
+            return super().build()
+        return cls(VERSION=0xff)
+    
+    def isOverloaded(self):
+        return self.VERSION == 0xff
 
 
 class EPACKET(BasePacket):
@@ -301,7 +310,10 @@ class ServerHandshakeProtocol(BaseBlockingProtocol):
         super().__init__(sender, receiver)
         self.serverKey = aServerKey
     
-    def execute(self):
+    def execute(self, overloaded=False):
+        if overloaded:
+            self.send(V_INF_PACKET.build(overloaded=True).encode())
+            assert False
         lCurPacket = V_INF_PACKET.receive(self.recv)
         self.send(V_INF_PACKET.build().encode())
         assert VERSION == lCurPacket.get_VERSION()
@@ -333,6 +345,9 @@ class ClientHandshakeProtocol(BaseBlockingProtocol):
     def execute(self, aServerPKey=None):
         self.send(V_INF_PACKET.build().encode())
         lStage0Packet = V_INF_PACKET.receive(self.recv)
+        if lStage0Packet.isOverloaded():
+            utils.log("Server overloaded")
+            assert False
         assert VERSION == lStage0Packet.get_VERSION()
         if aServerPKey is None:
             self.send(HSH_CL_ASK_PACKET.build(self.clientKey.getPublicKey()).encode())

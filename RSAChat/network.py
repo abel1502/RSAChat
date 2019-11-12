@@ -3,11 +3,14 @@ import socketserver
 import asyncio
 import hashlib
 from collections import deque
+from weakref import WeakSet
 import time
 from . import utils
 from . import protocol
 from . import RSA
 from . import messaging
+
+MAX_CONNECTIONS = 64
 
 
 class RoutingTable(dict):
@@ -38,10 +41,14 @@ class RoutingTable(dict):
 
 
 class ServerInitialHandler(socketserver.StreamRequestHandler):
-    def __init__(self, aServerKey, aRoutingTable, *args, **kwargs):
+    def __init__(self, aServerKey, aRoutingTable, aActiveConnections, *args, **kwargs):
         self.serverKey = aServerKey
         self.routingTable = aRoutingTable
+        self.activeConnections = aActiveConnections
         super().__init__(*args, **kwargs)
+    
+    def isOverloaded(self):  # ? Needs some testing
+        return len(self.activeConnections) > MAX_CONNECTIONS
     
     def recv(self, n):
         lBuf = utils.Buffer()
@@ -57,7 +64,8 @@ class ServerInitialHandler(socketserver.StreamRequestHandler):
         # TODO: Timeout and check for shutdown?
         
         lHshP = protocol.ServerHandshakeProtocol(self.send, self.recv, self.serverKey)
-        lClientPKey, lSessionID = lHshP.execute()
+        lClientPKey, lSessionID = lHshP.execute(overloaded=self.isOverloaded())
+        self.activeConnections.add(self.request)
         
         lLoop = asyncio.new_event_loop() # ?
         lTransport, lServerGeneralProtocol = lLoop.run_until_complete(lLoop.connect_accepted_socket(lambda *args, **kwargs: ServerGeneralProtocol(self.routingTable, lLoop, self.serverKey, lClientPKey, lSessionID, *args, **kwargs), self.request))
@@ -164,8 +172,8 @@ class ClientGeneralProtocol(BaseGeneralProtocol):
             lSender = lSPacket.get_SPKEY()
             lPPacket = lSPacket.get_SPDATA(self.selfKey)
             assert lPPacket.verify(lSender)
-            #lMessage = messaging.Message.fromPPacket(lPPacket, lSender, lReceiver)
-            utils.log(lSender, lPPacket)
+            lMessage = messaging.Message.fromPPacket(lPPacket, lSender, self.selfKey.getPublicKey())
+            utils.log(lMessage)
     
     async def background_outgoing(self):
         await self.connected
@@ -193,7 +201,8 @@ class ClientGeneralProtocol(BaseGeneralProtocol):
 def start_server(host="", port=8887, aServerKey=None):
     serverKey = utils.loadRSAKey(aServerKey, PRIV=True) if aServerKey is not None else RSA.genKeyPair()[1]
     routingTable = RoutingTable()
-    with socketserver.ThreadingTCPServer((host, port), (lambda *args, **kwargs: ServerInitialHandler(serverKey, routingTable, *args, **kwargs))) as serv:
+    activeConnections = WeakSet()
+    with socketserver.ThreadingTCPServer((host, port), (lambda *args, **kwargs: ServerInitialHandler(serverKey, routingTable, activeConnections, *args, **kwargs))) as serv:
         serv.serve_forever()
     serv.close()  # ?
 
