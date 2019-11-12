@@ -57,10 +57,10 @@ class ServerInitialHandler(socketserver.StreamRequestHandler):
         # TODO: Timeout and check for shutdown?
         
         lHshP = protocol.ServerHandshakeProtocol(self.send, self.recv, self.serverKey)
-        lClientPKey = lHshP.execute()
+        lClientPKey, lSessionID = lHshP.execute()
         
         lLoop = asyncio.new_event_loop() # ?
-        lTransport, lServerGeneralProtocol = lLoop.run_until_complete(lLoop.connect_accepted_socket(lambda *args, **kwargs: ServerGeneralProtocol(lLoop, self.serverKey, lClientPKey, self.routingTable, *args, **kwargs), self.request))
+        lTransport, lServerGeneralProtocol = lLoop.run_until_complete(lLoop.connect_accepted_socket(lambda *args, **kwargs: ServerGeneralProtocol(self.routingTable, lLoop, self.serverKey, lClientPKey, lSessionID, *args, **kwargs), self.request))
         try:
             lLoop.run_until_complete(lServerGeneralProtocol.disconnected)
         except KeyboardInterrupt:
@@ -71,9 +71,10 @@ class ServerInitialHandler(socketserver.StreamRequestHandler):
 
 
 class BaseGeneralProtocol(asyncio.Protocol):
-    def __init__(self, aLoop, aSelfKey, aOtherPKey, *args, **kwargs):
+    def __init__(self, aLoop, aSelfKey, aOtherPKey, aSessionID, *args, **kwargs):
         self.selfKey = aSelfKey
         self.otherPKey = aOtherPKey
+        self.sessionID = aSessionID
         # ? Got to be awaited/executed in loop
         asyncio.gather(*[self.__getattribute__(i)() for i in dir(self) if i.startswith("background_")], loop=aLoop)
         self.connected = aLoop.create_future()
@@ -102,10 +103,10 @@ class BaseGeneralProtocol(asyncio.Protocol):
 
 
 class ServerGeneralProtocol(BaseGeneralProtocol):
-    def __init__(self, aLoop, aSelfKey, aOtherPKey, aRoutingTable, *args, **kwargs):
+    def __init__(self, aRoutingTable, aLoop, aSelfKey, aOtherPKey, aSessionID, *args, **kwargs):
         self.routingTable = aRoutingTable
         self.routingTable.initialize(aOtherPKey)
-        super().__init__(aLoop, aSelfKey, aOtherPKey, *args, **kwargs)
+        super().__init__(aLoop, aSelfKey, aOtherPKey, aSessionID, *args, **kwargs)
     
     def connection_made(self, transport):
         utils.log("General phase")
@@ -121,9 +122,11 @@ class ServerGeneralProtocol(BaseGeneralProtocol):
             except utils.NotEnoughDataException:
                 continue
             lSPacket = lEPacket.get_EPDATA(self.selfKey)
+            assert lSPacket.get_SPSID() == self.sessionID
             lRecepient = lSPacket.get_SPKEY()
             lSPacket.SPKEY = utils.dumpRSAKey(self.otherPKey, PUB=True).encode()
             self.routingTable.put(lRecepient, lSPacket)
+            utils.log("[*] Message from:\n{}\nTo:\n{}\n[*]".format(utils.dumpRSAKey(self.otherPKey, PUB=True), utils.dumpRSAKey(lRecepient, PUB=True)))
     
     async def background_outgoing(self):
         await self.connected
@@ -134,6 +137,7 @@ class ServerGeneralProtocol(BaseGeneralProtocol):
                 lSPacket = self.routingTable.get(self.otherPKey)
             except utils.NotEnoughDataException:
                 continue
+            lSPacket.SPSID = self.sessionID
             self.send(protocol.REGULAR_PACKET.build(lSPacket, self.otherPKey).encode())
 
     def connection_lost(self, exc=None):
@@ -156,13 +160,15 @@ class ClientGeneralProtocol(BaseGeneralProtocol):
             except utils.NotEnoughDataException:
                 continue
             lSPacket = lEPacket.get_EPDATA(self.selfKey)
+            assert lSPacket.get_SPSID() == self.sessionID
             lSender = lSPacket.get_SPKEY()
             lPPacket = lSPacket.get_SPDATA(self.selfKey)
-            utils.log(lPPacket)
+            assert lPPacket.verify(lSender)
+            utils.log(lSender, lPPacket)
     
     async def background_outgoing(self):
         await self.connected
-        while True:
+        while True:  # TODO: Finish
             #utils.log("Client out")
             await asyncio.sleep(0)
             try:
@@ -172,9 +178,10 @@ class ClientGeneralProtocol(BaseGeneralProtocol):
             lRecepient = self.selfKey.getPublicKey()
             lMessage = "Hello"
             lPPacket = protocol.PPACKET.build(lMessage, self.selfKey)
-            lSPacket = protocol.SPACKET.build(lPPacket, lRecepient)
+            lSPacket = protocol.SPACKET.build(lPPacket, lRecepient, self.sessionID)
             lEPacket = protocol.REGULAR_PACKET.build(lSPacket, self.otherPKey)
             self.send(lEPacket.encode())
+            utils.log("Sending...")
             return
 
     def connection_lost(self, exc=None):
@@ -204,10 +211,10 @@ def connect_client(host, port=8887, aClientKey=None, aServerPKey=None):
         lClientSocket.sendall(data)
     
     lHshP = protocol.ClientHandshakeProtocol(_send, _recv, aClientKey)  # ?
-    lServerPKey = lHshP.execute(aServerPKey)
+    lServerPKey, lSessionID = lHshP.execute(aServerPKey)
     
     lLoop = asyncio.get_event_loop() # ?
-    lTransport, lClientGeneralProtocol = lLoop.run_until_complete(lLoop.create_connection(lambda *args, **kwargs: ClientGeneralProtocol(lLoop, lClientKey, lServerPKey, *args, **kwargs), sock=lClientSocket))
+    lTransport, lClientGeneralProtocol = lLoop.run_until_complete(lLoop.create_connection(lambda *args, **kwargs: ClientGeneralProtocol(lLoop, lClientKey, lServerPKey, lSessionID, *args, **kwargs), sock=lClientSocket))
     try:
         lLoop.run_until_complete(lClientGeneralProtocol.disconnected)
     except KeyboardInterrupt:

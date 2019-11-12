@@ -7,7 +7,7 @@ from . import RSA
 import hashlib
 import struct
 
-VERSION = 1
+VERSION = 2
 
 
 class EPACKET_TYPE: # Inheritance from Enum?
@@ -17,6 +17,7 @@ class EPACKET_TYPE: # Inheritance from Enum?
     HSH_CL_SIMPLE = 3
     HSH_VER_ASK = 4
     HSH_VER_ANS = 5
+    HSH_SID = 6
 
 
 class BasePacket:
@@ -198,6 +199,20 @@ class HSH_VER_ANS_PACKET(EPACKET):
         return serverKey.decrypt(self.SOLUTION)
 
 
+class HSH_SID_PACKET(EPACKET):
+    structure = [("EPID", int, 1), ("SID", bytes, -3)]
+    defaultFields = {"EPID": EPACKET_TYPE.HSH_SID, "SID": None}
+    
+    @classmethod
+    def build(cls, sessionID, otherPKey):
+        otherPKey = utils.loadRSAKey(otherPKey, PUB=True)
+        return cls(SID=otherPKey.encrypt(sessionID))
+    
+    def get_SID(self, selfKey):
+        selfKey = utils.loadRSAKey(selfKey, PRIV=True)
+        return selfKey.decrypt(self.SID)
+
+
 # ? Rename all those into ..._EPACKET
 class REGULAR_PACKET(EPACKET):
     structure = [("EPID", int, 1), ("EPDATA", bytes, -3)]
@@ -215,17 +230,18 @@ class REGULAR_PACKET(EPACKET):
 
 EPACKET.types = {EPACKET_TYPE.REGULAR: REGULAR_PACKET, EPACKET_TYPE.HSH_CL_ASK: HSH_CL_ASK_PACKET,
                                  EPACKET_TYPE.HSH_SRV_ANS: HSH_SRV_ANS_PACKET, EPACKET_TYPE.HSH_CL_SIMPLE: HSH_CL_SIMPLE_PACKET,
-                                 EPACKET_TYPE.HSH_VER_ASK: HSH_VER_ASK_PACKET, EPACKET_TYPE.HSH_VER_ANS: HSH_VER_ANS_PACKET}
+                                 EPACKET_TYPE.HSH_VER_ASK: HSH_VER_ASK_PACKET, EPACKET_TYPE.HSH_VER_ANS: HSH_VER_ANS_PACKET,
+                                 EPACKET_TYPE.HSH_SID: HSH_SID_PACKET}
 
 
 class SPACKET(BasePacket):
-    structure = [("SPDATA", bytes, -2), ("SPKEY", bytes, -2), ("salt", bytes, 16)]
-    defaultFields = {"SPDATA": None, "SPKEY": None, "salt": None}
+    structure = [("SPDATA", bytes, -2), ("SPKEY", bytes, -2), ("SPSID", bytes, 16), ("salt", bytes, 16)]
+    defaultFields = {"SPDATA": None, "SPKEY": None, "salt": None, "SPSID": None}
     
     @classmethod
-    def build(cls, ppacket, recepientPKey):
+    def build(cls, ppacket, recepientPKey, sessionID):
         recepientPKey = utils.loadRSAKey(recepientPKey, PUB=True)
-        return cls(SPDATA=recepientPKey.encrypt(ppacket.encode()), SPKEY=utils.dumpRSAKey(recepientPKey, PUB=True).encode(), salt=hashlib.md5(utils.randomBytes(16)).digest())
+        return cls(SPDATA=recepientPKey.encrypt(ppacket.encode()), SPKEY=utils.dumpRSAKey(recepientPKey, PUB=True).encode(), SPSID=sessionID, salt=hashlib.md5(utils.randomBytes(16)).digest())
     
     def get_SPDATA(self, selfKey):
         selfKey = utils.loadRSAKey(selfKey, PRIV=True)
@@ -246,7 +262,9 @@ class PPACKET(BasePacket):
         assert len(msg) < 30000
         senderKey = utils.loadRSAKey(senderKey, PRIV=True)
         replyTo = senderKey.getPublicKey()
-        MSG = utils.dumpRSAKey(replyTo, PUB=True).encode() + b'\n' + msg
+        # ? Supporsedly unnecessary
+        #MSG = utils.dumpRSAKey(replyTo, PUB=True).encode() + b'\n' + msg
+        MSG = msg
         salt = hashlib.md5(utils.randomBytes(16)).digest()
         TIME = int(time.time())
         HASH = senderKey.sign(salt + MSG + TIME.to_bytes(4, "big"))
@@ -254,8 +272,8 @@ class PPACKET(BasePacket):
         
     def verify(self, replyTo):
         assert self.isComplete()
-        replyTo = utils.loadRSAKey(replyTo)
-        return replyTo.verify(hashlib.sha256(self.salt + self.MSG + self.TIME.to_bytes(4, "big")), self.HASH)
+        replyTo = utils.loadRSAKey(replyTo, PUB=True)
+        return replyTo.verify(self.salt + self.MSG + self.TIME.to_bytes(4, "big"), self.HASH)
 
 
 class BaseBlockingProtocol:
@@ -273,24 +291,27 @@ class ServerHandshakeProtocol(BaseBlockingProtocol):
         self.serverKey = aServerKey
     
     def execute(self):
-        lStage0Packet = V_INF_PACKET.receive(self.recv)
+        lCurPacket = V_INF_PACKET.receive(self.recv)
         self.send(V_INF_PACKET.build().encode())
-        assert VERSION == lStage0Packet.get_VERSION()
-        lStage1Packet = EPACKET.receive(self.recv)
-        if isinstance(lStage1Packet, HSH_CL_ASK_PACKET):
-            lClientPKey = lStage1Packet.get_CL_PKEY()
+        assert VERSION == lCurPacket.get_VERSION()
+        lCurPacket = EPACKET.receive(self.recv)
+        if isinstance(lCurPacket, HSH_CL_ASK_PACKET):
+            lClientPKey = lCurPacket.get_CL_PKEY()
             self.send(HSH_SRV_ANS_PACKET.build(self.serverKey.getPublicKey(), lClientPKey).encode())
-        elif isinstance(lStage1Packet, HSH_CL_SIMPLE_PACKET):
-            lClientPKey = lStage1Packet.get_CL_PKEY(self.serverKey)
+        elif isinstance(lCurPacket, HSH_CL_SIMPLE_PACKET):
+            lClientPKey = lCurPacket.get_CL_PKEY(self.serverKey)
         else:
             assert False
         
         lChallenge = hashlib.md5(utils.randomBytes(16)).digest()
         self.send(HSH_VER_ASK_PACKET.build(lChallenge, lClientPKey).encode())
-        lStage2Packet = HSH_VER_ANS_PACKET.receive(self.recv)
-        if hashlib.sha256(lChallenge).digest() != lStage2Packet.get_SOLUTION(self.serverKey):
+        lCurPacket = HSH_VER_ANS_PACKET.receive(self.recv)
+        if hashlib.sha256(lChallenge).digest() != lCurPacket.get_SOLUTION(self.serverKey):
             assert False
-        return lClientPKey
+        
+        lSessionID = hashlib.md5(utils.randomBytes(16)).digest()  # ? Merge with challenge?
+        self.send(HSH_SID_PACKET.build(lSessionID, lClientPKey).encode())
+        return lClientPKey, lSessionID
 
 
 class ClientHandshakeProtocol(BaseBlockingProtocol):
@@ -314,4 +335,7 @@ class ClientHandshakeProtocol(BaseBlockingProtocol):
         lChallenge = lStage2Packet.get_CHALLENGE(self.clientKey)
         lSolution = hashlib.sha256(lChallenge).digest()
         self.send(HSH_VER_ANS_PACKET.build(lSolution, lServerPKey).encode())
-        return lServerPKey
+        
+        lCurPacket = HSH_SID_PACKET.receive(self.recv)
+        lSessionID = lCurPacket.get_SID(self.clientKey)
+        return lServerPKey, lSessionID
