@@ -1,4 +1,5 @@
 import math
+from threading import Lock
 from . import cryptoRandom
 import random
 import sys
@@ -6,26 +7,7 @@ import configparser
 import os
 import threading
 import time
-
-
-def egcd(a, b):
-    # Extended Euclid's algorithm
-    if b == 0:
-        return (1, 0, a)
-    x1, y1, g = egcd(b, a % b)
-    return (y1, x1 - (a // b) * y1, g)
-
-
-def modularInverse(n, p):
-    # Modular inverse of n by modulo p
-    m, k, g = egcd(n, p)
-    if g != 1:
-        raise Exception("utils.modularInverse", "GCD(n, p) != 1")
-    k = -k
-    while m < 0:
-        m += p
-        k += n
-    return m
+from . import RSA
 
 
 def checkParamTypes(source, args, types):
@@ -79,11 +61,11 @@ def int2bytes(n):
 
 
 def raiseException(source, text):
-    raise Exception("<ERROR in {}(): {}>".format(source, text))
+    raise Exception("<ERROR in {}: {}>".format(source, text))
 
 
 def showWarning(source, text):
-    print("<WARNING in {}(): {}>".format(source, text), file=sys.stderr)
+    print("<WARNING in {}: {}>".format(source, text), file=sys.stderr)
 
 
 def openIni(path):
@@ -120,10 +102,6 @@ class IniParser:
             self.parser.write(f)
 
 
-def exit():
-    time.sleep(2)  # So that all threads can finish?...
-
-
 class Thread(threading.Thread):
     """https://stackoverflow.com/questions/323972/is-there-any-way-to-kill-a-thread"""
     def __init__(self, *args, **kwargs):
@@ -141,10 +119,6 @@ def startThread(target, args=tuple()):
     return t
 
 
-def popBuf(buf, length):
-    return buf[length:], buf[:length]
-
-
 def randomBytes(length):
     return random.randint(0, 256 ** length).to_bytes(length, "big")
 
@@ -158,3 +132,64 @@ def randomBytes(length):
 #def unpad(data):
     #length = data[0]
     #return data[length:]
+
+
+def loadRSAKey(encKey, PRIV=False, PUB=False):
+    lKey = encKey
+    if isinstance(encKey, bytes):
+        lKey = lKey.decode()
+    if isinstance(lKey, str):
+        lKey = RSA.Key.load(lKey)
+    
+    if (lKey.isPub() and PUB) or (lKey.isPriv() and PRIV):
+        return lKey
+    assert False
+
+
+def dumpRSAKey(key, PRIV=False, PUB=False):
+    key = loadRSAKey(key, PRIV, PUB)
+    if (key.isPub() and PUB) or (key.isPriv() and PRIV):
+        return key.dump()
+    assert False
+
+
+class NotEnoughDataException(Exception):
+    pass
+
+
+class Buffer:
+    def __init__(self, *args, blocking=False, **kwargs):
+        self._buf = bytearray(*args, **kwargs)
+        self.blocking = blocking
+        self._lock = Lock()  # Non-blocking? Timeout?
+
+    def put(self, data):
+        #self._lock.acquire()
+        self._buf.extend(data)
+        #self._lock.release()
+
+    def get(self, size):
+        #self._lock.acquire()
+        while self.blocking and len(self) < size:
+            pass
+        if len(self) < size:
+            raise NotEnoughDataException()
+        self._lock.acquire()
+        data = bytes(self._buf[:size])
+        self._buf[:size] = b''
+        self._lock.release()
+        return data
+    
+    def getAll(self):
+        return self.get(len(self))
+
+    def peek(self, size):
+        return self._buf[:size]
+
+    def __len__(self):
+        return len(self._buf)
+
+
+def log(*data):
+    print(*data)
+    sys.stdout.flush()
