@@ -116,6 +116,20 @@ class Key:
         assert self.isPriv  # ?
         return Key(self.fields["n"], self.fields["e"])
     
+    def getFingerprint(self, hasher=hashlib.sha256, hex=False):
+        lHash = hasher(self.dump().encode())
+        if hex:
+            return lHash.hexdigest()
+        return lHash.digest()
+    
+    def checkFingerprint(self, fingerprint, hasher=hashlib.sha256, hex=False):
+        return self.getFingerprint(hasher=hasher, hex=hex) == fingerprint
+    
+    def getReprName(self, color=True):
+        lNickname = utils.generateNickname(self)
+        lFingerprint = self.getFingerprint(hex=True)  # ? Is trimming okay?
+        return "{}<{}>".format(lNickname, lFingerprint)
+    
     def __eq__(self, other):
         return type(self) is type(other) and self.type is other.type and self.fields == other.fields
     

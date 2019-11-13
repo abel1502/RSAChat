@@ -134,7 +134,7 @@ class ServerGeneralProtocol(BaseGeneralProtocol):
             lRecepient = lSPacket.get_SPKEY()
             lSPacket.SPKEY = utils.dumpRSAKey(self.otherPKey, PUB=True).encode()
             self.routingTable.put(lRecepient, lSPacket)
-            utils.log("[*] Message from:\n{}\nTo:\n{}\n[*]".format(utils.dumpRSAKey(self.otherPKey, PUB=True), utils.dumpRSAKey(lRecepient, PUB=True)))
+            utils.log("[*] Message from:\n{}\nTo:\n{}\n[*]".format(self.otherPKey.getReorName(), lRecepient.getReprName()))
     
     async def background_outgoing(self):
         await self.connected

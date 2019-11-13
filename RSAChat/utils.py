@@ -6,6 +6,7 @@ import sys
 import configparser
 import os
 import threading
+from urllib.request import urlopen
 import time
 from . import RSA
 
@@ -151,6 +152,43 @@ def dumpRSAKey(key, PRIV=False, PUB=False):
     if (key.isPub() and PUB) or (key.isPriv() and PRIV):
         return key.dump()
     assert False
+
+
+# ? Bytes support?
+def csi(*payload):
+    return "\x1b[{}m".format(";".join(map(str, payload)))
+
+def wrapCsi(data, *payload):
+    return csi(*payload) + str(data) + csi()
+
+def stripCsi(data):
+    return data.replace("\x1b", "")
+
+
+def generateNickname(key, color=True):  # TODO: Support bw
+    key = loadRSAKey(key, PUB=True)  # ? Allow priv?
+    lRnd = random.Random(key.fields["n"])  # ? Hopefully sufficient
+    #lRnd = random.Random(key.getFingerprint())
+    #lUrl = "https://gist.github.com/abel1502/7490688318d63cbaed234374e88ded74/raw/{}.txt"
+    #lFirsts = tuple(urlopen(lUrl.format("adjectives")).read().decode().split("\n"))
+    #lSeconds = tuple(urlopen(lUrl.format("nouns")).read().decode().split("\n"))
+    with open("config/adjectives.txt", "r") as f:
+        data = f.read()
+        import hashlib
+        assert hashlib.sha256(data.encode()).hexdigest() == "aa7f9d272f709fd962a433531e1bc8afa4df9d4fd22ca8611a53e22030a90be5"
+        lFirsts = tuple(data.split("\n"))
+    with open("config/nouns.txt", "r") as f:
+        data = f.read()
+        assert hashlib.sha256(data.encode()).hexdigest() == "dd26cd1322a6d43ee631fb4ae86e386e03dd868d2cb5dfcc2cf25d40ddc20f25"
+        lSeconds = tuple(data.split("\n"))
+    lColors = (31, 32, 33, 34, 35, 36)
+    lFirst = lRnd.choice(lFirsts)
+    lSecond = lRnd.choice(lSeconds)
+    if color:
+        lColor = lRnd.choice(lColors)
+    else:
+        lColor = 0
+    return wrapCsi("{}_{}".format(lFirst, lSecond), lColor)
 
 
 class NotEnoughDataException(Exception):
