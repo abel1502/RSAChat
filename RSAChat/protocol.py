@@ -1,13 +1,12 @@
 # TODO: verify tons of stuff!!
 
-from . import utils
-from enum import Enum
-import time
-from . import RSA
 import hashlib
 import struct
+from . import RSA
+from . import utils
 
 VERSION = 2
+MIN_KEY_LEN = 1023
 
 
 class EPACKET_TYPE: # Inheritance from Enum?
@@ -46,6 +45,12 @@ class BasePacket:
         else:
             return super().__getattribute__(attr)
     
+    def __setattr__(self, attr, val):
+        if "fields" in dir(self) and attr in self.fields:
+            self.fields[attr] = val
+        else:
+            super().__setattr__(attr, val)
+    
     def isComplete(self):
         for field in self.fields:
             if self.fields[field] is None:
@@ -68,6 +73,9 @@ class BasePacket:
             else:
                 utils.raiseException("protocol.BasePacket.encode", "Not implemented")
         return result
+    
+    def copy(self):
+        return type(self)(**self.fields)
     
     @classmethod
     def build(cls):
@@ -276,17 +284,16 @@ class PPACKET(BasePacket):
     defaultFields = {"salt": None, "MSG": None, "TIME": None, "HASH":None}
     
     @classmethod
-    def build(cls, msg, senderKey):
+    def build(cls, msg, senderKey, time):
         if isinstance(msg, str):
             msg = msg.encode()
-        assert len(msg) < 30000
         senderKey = utils.loadRSAKey(senderKey, PRIV=True)
         replyTo = senderKey.getPublicKey()
         # ? Supporsedly unnecessary
         #MSG = utils.dumpRSAKey(replyTo, PUB=True).encode() + b'\n' + msg
         MSG = msg
         salt = hashlib.md5(utils.randomBytes(16)).digest()
-        TIME = int(time.time())
+        TIME = time
         HASH = senderKey.sign(salt + MSG + TIME.to_bytes(4, "big"))
         return cls(MSG=MSG, salt=salt, TIME=TIME, HASH=HASH)
     
@@ -331,6 +338,7 @@ class ServerHandshakeProtocol(BaseBlockingProtocol):
         lCurPacket = HSH_VER_ANS_PACKET.receive(self.recv)
         if hashlib.sha256(lChallenge).digest() != lCurPacket.get_SOLUTION(self.serverKey):
             assert False
+        assert lClientPKey.fields["n"] >= 1 << MIN_KEY_LEN
         
         lSessionID = hashlib.md5(utils.randomBytes(16)).digest()  # ? Merge with challenge?
         self.send(HSH_SID_PACKET.build(lSessionID, lClientPKey).encode())
@@ -361,6 +369,7 @@ class ClientHandshakeProtocol(BaseBlockingProtocol):
         lChallenge = lStage2Packet.get_CHALLENGE(self.clientKey)
         lSolution = hashlib.sha256(lChallenge).digest()
         self.send(HSH_VER_ANS_PACKET.build(lSolution, lServerPKey).encode())
+        assert lServerPKey.fields["n"] >= 1 << MIN_KEY_LEN
         
         lCurPacket = HSH_SID_PACKET.receive(self.recv)
         lSessionID = lCurPacket.get_SID(self.clientKey)

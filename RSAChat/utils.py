@@ -66,7 +66,7 @@ def raiseException(source, text):
 
 
 def showWarning(source, text):
-    print("<WARNING in {}: {}>".format(source, text), file=sys.stderr)
+    log("<WARNING in {}: {}>".format(source, text), file=sys.stderr)
 
 
 def openIni(path):
@@ -230,4 +230,17 @@ class Buffer:
 
 def log(*data):
     print(*data)
+    flush()
+
+
+def flush():
     sys.stdout.flush()
+
+
+def logIdentity(key):
+    key = loadRSAKey(key, PRIV=True)
+    log("Your identity:\n{priv}\n{pub}\n{nick}\n".format(priv=key.dump(), pub=key.getPublicKey().dump(), nick=key.getPublicKey().getReprName()))
+
+
+def exit():
+    os._exit(0)
