@@ -5,10 +5,9 @@ import hashlib
 from collections import deque
 from weakref import WeakSet
 import time
-from . import utils
-from . import protocol
-from . import RSA
-from . import messaging
+from RSAChat import utils
+from RSAChat import protocol
+from RSAChat import messaging
 
 MAX_CONNECTIONS = 64
 
@@ -120,7 +119,7 @@ class BaseGeneralProtocol(asyncio.Protocol):
         if withSID is None:
             withSID = self.logWithSID
         if withSID:
-            lSessionMarker = self.sessionFalir.format(self.sessionID.hex())
+            lSessionMarker = self.sessionFlair.format(self.sessionID.hex())
             utils.log(lSessionMarker, *data)
         else:
             utils.log(*data)
@@ -148,7 +147,7 @@ class BaseGeneralProtocol(asyncio.Protocol):
 
 class ServerGeneralProtocol(BaseGeneralProtocol):
     logWithSID = True
-    sessionFalir = utils.wrapCsi("[{}]", 96)
+    sessionFlair = utils.ColorProvider.getInstance().wrap("[{}]", 96)
     
     def __init__(self, aRoutingTable, aLoop, aSelfKey, aOtherPKey, aSessionID, *args, **kwargs):
         self.routingTable = aRoutingTable
@@ -176,12 +175,12 @@ class ServerGeneralProtocol(BaseGeneralProtocol):
             if lRecepient == self.selfKey.getPublicKey():
                 for lMember in self.routingTable.getEveryone(online=True):
                     lNewSPacket = protocol.SPACKET.build(lSPacket.get_SPDATA(self.selfKey), lMember, self.sessionID)
-                    lNewSPacket.SPKEY = utils.dumpRSAKey(self.otherPKey, PUB=True).encode()
+                    lNewSPacket.SPKEY = utils.RSA.dumpKey(self.otherPKey, PUB=True).encode()
                     self.routingTable.put(lMember, lNewSPacket)
                 self.log("[*] Message from:\n{}\nTo: Everyone".format(self.otherPKey.getReprName()))
             else:
                 lNewSPacket = protocol.SPACKET.copy(lSPacket)
-                lNewSPacket.SPKEY = utils.dumpRSAKey(self.otherPKey, PUB=True).encode()
+                lNewSPacket.SPKEY = utils.RSA.dumpKey(self.otherPKey, PUB=True).encode()
                 self.routingTable.put(lRecepient, lNewSPacket)
                 self.log("[*] Message from:\n{}\nTo:\n{}".format(self.otherPKey.getReprName(), lRecepient.getReprName()))
     
@@ -253,7 +252,7 @@ class ClientGeneralProtocol(BaseGeneralProtocol):
 
 
 def start_server(host="", port=8887, aServerKey=None):
-    serverKey = utils.loadRSAKey(aServerKey, PRIV=True) if aServerKey is not None else RSA.genKeyPair()[1]
+    serverKey = utils.RSA.loadKey(aServerKey, PRIV=True) if aServerKey is not None else RSA.genKeyPair()[1]
     routingTable = RoutingTable()
     activeConnections = WeakSet()
     with socketserver.ThreadingTCPServer((host, port), (lambda *args, **kwargs: ServerInitialHandler(serverKey, routingTable, activeConnections, *args, **kwargs))) as serv:
@@ -262,7 +261,7 @@ def start_server(host="", port=8887, aServerKey=None):
 
 
 def connect_client(host, port=8887, aClientKey=None, aServerPKey=None):    
-    lClientKey = utils.loadRSAKey(aClientKey, PRIV=True) if aClientKey is not None else RSA.genKeyPair()[1]
+    lClientKey = utils.RSA.loadKey(aClientKey, PRIV=True) if aClientKey is not None else RSA.genKeyPair()[1]
     lClientSocket = socket.create_connection((host, port))
     
     def _recv(n):

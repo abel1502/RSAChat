@@ -2,8 +2,7 @@
 
 import hashlib
 import struct
-from . import RSA
-from . import utils
+from RSAChat import utils
 
 VERSION = 2
 MIN_KEY_LEN = 1023
@@ -158,11 +157,11 @@ class HSH_CL_ASK_PACKET(EPACKET_DATA):
     
     @classmethod
     def build(cls, clientPKey):
-        clientPKey = utils.dumpRSAKey(clientPKey, PUB=True).encode()
+        clientPKey = utils.RSA.dumpKey(clientPKey, PUB=True).encode()
         return cls(CL_PKEY=clientPKey)
     
     def get_CL_PKEY(self):
-        return utils.loadRSAKey(self.CL_PKEY, PUB=True)
+        return utils.RSA.loadKey(self.CL_PKEY, PUB=True)
 
 
 class HSH_SRV_ANS_PACKET(EPACKET_DATA):
@@ -172,14 +171,14 @@ class HSH_SRV_ANS_PACKET(EPACKET_DATA):
     
     @classmethod
     def build(cls, serverPKey, clientPKey):
-        serverPKey = utils.dumpRSAKey(serverPKey, PUB=True).encode()
-        clientPKey = utils.loadRSAKey(clientPKey, PUB=True)
+        serverPKey = utils.RSA.dumpKey(serverPKey, PUB=True).encode()
+        clientPKey = utils.RSA.loadKey(clientPKey, PUB=True)
         serverPKey = clientPKey.encrypt(serverPKey)
         return cls(S_PKEY=serverPKey)
     
     def get_S_PKEY(self, clientKey):
-        clientKey = utils.loadRSAKey(clientKey, PRIV=True)
-        return utils.loadRSAKey(clientKey.decrypt(self.S_PKEY), PUB=True)
+        clientKey = utils.RSA.loadKey(clientKey, PRIV=True)
+        return utils.RSA.loadKey(clientKey.decrypt(self.S_PKEY), PUB=True)
 
 
 class HSH_CL_SIMPLE_PACKET(EPACKET_DATA):
@@ -189,14 +188,14 @@ class HSH_CL_SIMPLE_PACKET(EPACKET_DATA):
     
     @classmethod
     def build(cls, clientPKey, serverPKey):
-        clientPKey = utils.dumpRSAKey(clientPKey, PUB=True).encode()
-        serverPKey = utils.loadRSAKey(serverPKey, PRIV=True)
+        clientPKey = utils.RSA.dumpKey(clientPKey, PUB=True).encode()
+        serverPKey = utils.RSA.loadKey(serverPKey, PRIV=True)
         clientPKey = serverPKey.encrypt(clientPKey)
         return cls(CL_PKEY=clientPKey)
     
     def get_CL_PKEY(self, serverKey):
-        serverKey = utils.loadRSAKey(serverKey, PRIV=True)
-        return utils.loadRSAKey(serverKey.decrypt(self.CL_PKEY), PUB=True)
+        serverKey = utils.RSA.loadKey(serverKey, PRIV=True)
+        return utils.RSA.loadKey(serverKey.decrypt(self.CL_PKEY), PUB=True)
 
 
 class HSH_VER_ASK_PACKET(EPACKET_DATA):
@@ -206,12 +205,12 @@ class HSH_VER_ASK_PACKET(EPACKET_DATA):
     
     @classmethod
     def build(cls, challenge, clientPKey):
-        clientPKey = utils.loadRSAKey(clientPKey, PUB=True)
+        clientPKey = utils.RSA.loadKey(clientPKey, PUB=True)
         challenge = clientPKey.encrypt(challenge)
         return cls(CHALLENGE=challenge)
     
     def get_CHALLENGE(self, clientKey):
-        clientKey = utils.loadRSAKey(clientKey, PRIV=True)
+        clientKey = utils.RSA.loadKey(clientKey, PRIV=True)
         return clientKey.decrypt(self.CHALLENGE)
 
 
@@ -222,12 +221,12 @@ class HSH_VER_ANS_PACKET(EPACKET_DATA):
     
     @classmethod
     def build(cls, solution, serverPKey):
-        serverPKey = utils.loadRSAKey(serverPKey, PUB=True)
+        serverPKey = utils.RSA.loadKey(serverPKey, PUB=True)
         solution = serverPKey.encrypt(solution)
         return cls(SOLUTION=solution)
     
     def get_SOLUTION(self, serverKey):
-        serverKey = utils.loadRSAKey(serverKey, PRIV=True)
+        serverKey = utils.RSA.loadKey(serverKey, PRIV=True)
         return serverKey.decrypt(self.SOLUTION)
 
 
@@ -238,11 +237,11 @@ class HSH_SID_PACKET(EPACKET_DATA):
     
     @classmethod
     def build(cls, sessionID, otherPKey):
-        otherPKey = utils.loadRSAKey(otherPKey, PUB=True)
+        otherPKey = utils.RSA.loadKey(otherPKey, PUB=True)
         return cls(SID=otherPKey.encrypt(sessionID))
     
     def get_SID(self, selfKey):
-        selfKey = utils.loadRSAKey(selfKey, PRIV=True)
+        selfKey = utils.RSA.loadKey(selfKey, PRIV=True)
         return selfKey.decrypt(self.SID)
 
 
@@ -254,11 +253,11 @@ class REGULAR_PACKET(EPACKET_DATA):
     
     @classmethod
     def build(cls, spacket, otherPKey):
-        otherPKey = utils.loadRSAKey(otherPKey, PUB=True)
+        otherPKey = utils.RSA.loadKey(otherPKey, PUB=True)
         return cls(EPDATA=otherPKey.encrypt(spacket.encode()))
     
     def get_EPDATA(self, selfKey):
-        selfKey = utils.loadRSAKey(selfKey, PRIV=True)
+        selfKey = utils.RSA.loadKey(selfKey, PRIV=True)
         return SPACKET.parse(selfKey.decrypt(self.EPDATA))
 
 
@@ -268,15 +267,15 @@ class SPACKET(BasePacket):
     
     @classmethod
     def build(cls, ppacket, recepientPKey, sessionID):
-        recepientPKey = utils.loadRSAKey(recepientPKey, PUB=True)
-        return cls(SPDATA=recepientPKey.encrypt(ppacket.encode()), SPKEY=utils.dumpRSAKey(recepientPKey, PUB=True).encode(), SPSID=sessionID, salt=hashlib.md5(utils.randomBytes(16)).digest())
+        recepientPKey = utils.RSA.loadKey(recepientPKey, PUB=True)
+        return cls(SPDATA=recepientPKey.encrypt(ppacket.encode()), SPKEY=utils.RSA.dumpKey(recepientPKey, PUB=True).encode(), SPSID=sessionID, salt=hashlib.md5(utils.randomBytes(16)).digest())
     
     def get_SPDATA(self, selfKey):
-        selfKey = utils.loadRSAKey(selfKey, PRIV=True)
+        selfKey = utils.RSA.loadKey(selfKey, PRIV=True)
         return PPACKET.parse(selfKey.decrypt(self.SPDATA))
     
     def get_SPKEY(self):
-        return utils.loadRSAKey(self.SPKEY, PUB=True)
+        return utils.RSA.loadKey(self.SPKEY, PUB=True)
 
 
 class PPACKET(BasePacket):
@@ -287,10 +286,10 @@ class PPACKET(BasePacket):
     def build(cls, msg, senderKey, time):
         if isinstance(msg, str):
             msg = msg.encode()
-        senderKey = utils.loadRSAKey(senderKey, PRIV=True)
+        senderKey = utils.RSA.loadKey(senderKey, PRIV=True)
         replyTo = senderKey.getPublicKey()
         # ? Supporsedly unnecessary
-        #MSG = utils.dumpRSAKey(replyTo, PUB=True).encode() + b'\n' + msg
+        #MSG = utils.RSA.dumpKey(replyTo, PUB=True).encode() + b'\n' + msg
         MSG = msg
         salt = hashlib.md5(utils.randomBytes(16)).digest()
         TIME = time
@@ -299,7 +298,7 @@ class PPACKET(BasePacket):
     
     def verify(self, replyTo):
         assert self.isComplete()
-        replyTo = utils.loadRSAKey(replyTo, PUB=True)
+        replyTo = utils.RSA.loadKey(replyTo, PUB=True)
         return replyTo.verify(self.salt + self.MSG + self.TIME.to_bytes(4, "big"), self.HASH)
 
 
@@ -362,7 +361,7 @@ class ClientHandshakeProtocol(BaseBlockingProtocol):
             lStage1Packet = HSH_SRV_ANS_PACKET.receive(self.recv)
             lServerPKey = lStage1Packet.get_S_PKEY(self.clientKey)
         else:
-            lServerPKey = utils.loadRSAKey(aServerPKey, PUB=True)
+            lServerPKey = utils.RSA.loadKey(aServerPKey, PUB=True)
             self.send(HSH_CL_SIMPLE_PACKET.build(self.clientKey.getPublicKey(), lServerPKey).encode())
         
         lStage2Packet = HSH_VER_ASK_PACKET.receive(self.recv)
