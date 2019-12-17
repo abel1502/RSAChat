@@ -181,10 +181,10 @@ class ServerGeneralProtocol(BaseGeneralProtocol):
             except utils.NotEnoughDataException:
                 continue
             lSPacket = lEPacket.get_EPDATA(self.selfKey)
-            assert lSPacket.verifySession()
+            assert lSPacket.verifySession(self.sessionID)
             lSPacket = lSPacket.INNER
             if isinstance(lSPacket, protocol.MESSAGE_SPACKET):
-                self.handleMessageSPacket(lSPacket)
+                self.handleMessagePacket(lSPacket)
             elif isinstance(lSpacket, protocol.LOOKUP_SPACKET):
                 self.handleLookupPacket(lSPacket)
             elif isinstance(lSPacket, protocol.ONLINE_SPACKET):
@@ -196,7 +196,7 @@ class ServerGeneralProtocol(BaseGeneralProtocol):
         lRecepient = packet.get_SPKEY()
         if lRecepient == self.selfKey.getPublicKey():
             for lMember in self.routingTable.getEveryone(online=True):
-                lNewSPacket = protocol.SPACKET.build(packet.get_SPDATA(self.selfKey), lMember.key, self.sessionID)
+                lNewSPacket = protocol.MESSAGE_SPACKET.build(packet.get_SPDATA(self.selfKey), lMember.key)
                 lNewSPacket.SPKEY = utils.RSA.dumpKey(self.otherPKey, PUB=True).encode()
                 self.routingTable.put(lMember.key, lNewSPacket)
             self.log("[*] Message from:\n{}\nTo: Everyone".format(self.otherPKey.getReprName()))
@@ -252,7 +252,7 @@ class ClientGeneralProtocol(BaseGeneralProtocol):
             except utils.NotEnoughDataException:
                 continue
             lSPacket = lEPacket.get_EPDATA(self.selfKey)
-            assert lSPacket.verifySession()
+            assert lSPacket.verifySession(self.sessionID)
             lSPacket = lSPacket.INNER
             assert isinstance(lSPacket, protocol.MESSAGE_SPACKET)
             lSender = lSPacket.get_SPKEY()
