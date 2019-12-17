@@ -12,8 +12,8 @@ def serverMain():
 
 
 def clientMain():
-    #priv = utils.RSA.loadKey("#PRIV#AwjZltppCYnSZoEEuMit79wKiG6VIsm19ie7UNDoj+hTPZIfs+/5rKC+11GLJ+U0pi3m/+NktL82MIGCJgUO5H0SvEIzh83QKH4Hszg/Lka4sBgdMUMSKftBtgI9pC39R11Wi7GOe3YiOZDVsz+AcUM2BV/72A72McUh6Jz3/W3ZW/bfaIgPIH9HtdguLW9qVaHoUJFO4Knp64pLyJoWtWwTTzzZ9qjIP2MxACm4YVWm/SIFfN2K3RLfavEob8qKLGIJ7S5D3jrT2D9atEh5SFylGjsnwVbnC4ciDQ4riPe+vXqwc5Q9TUDZ4NyfhiMle8uijLRdgafyooJeRLfSCVs=#AQAB#28EJnnE2JImjO34Fc6dYgcts+rMvaxYRMv4XB3GyO8tIUIytTwY24iX6LPQLbhgtpjCBVGcJhkmjAQ+7B5VF52ekX6nKEdt/iN9OwGuHALSAA+JGLC34OD5HaWzcg7HxPSMdUzX2EN3voNwC38TKxXODo7pPTTQxsg08iyLPywE+zvCj8S6UFciqcLh/RbhnW0by4RgKAmMoKKhuppn8ISq7Eq1Mj5WJcvZcf4OzSI5b8si8i9AGqsiR6WG8ZTIfOJgaPlx+QwXAX5HhhqfafHbHuBDSSBQcNvFMm8JzhLXAj867s/ZwkSoXK26rj7uhfOfT6tn84iF/tx28y2Mv0Q==#", PRIV=True)
-    priv = utils.RSA.genKeyPair(1024)[1]
+    priv = utils.RSA.loadKey("#PRIV#BNGbE0h9qCE8XY2BLCCbpIbnFOm3HgnMvA6SPoJkbo8KIeBRwb+Wr146rbMtyOKDaaHXPg99yAe+Dd4t91zdEDNU7DGXIsSpvT1TDaM59LyuP5hTdi7gFUlTpph/VhNrsxkdkVAlppBW4AV88M0C8WQpS/8ykj36c65RcND9h7ED#AQAB#BC0EXxSN2BpdLpFG5E+psU06ibPzfTNu2XUjJMpocCrC1BKJpwX5diWJYieJQLGSwgJ+/Yf9L1AOUgQ8/0TZSYDecwrrqEN78Nmcwx25ZGTBnNq/s76vVk0bt6Sg8QjF66dox3V7AU9bLpAdqhjrRRTIAL0UrQGSLBERUF+WDuSR#", PRIV=True)
+    #priv = utils.RSA.genKeyPair(1024)[1]
     utils.logIdentity(priv)
     network.connect_client("localhost", aClientKey=priv)
 

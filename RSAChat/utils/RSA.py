@@ -221,7 +221,7 @@ def dumpKey(key, PRIV=False, PUB=False):
 
 mnemonicPattern = "(#[a-zA-Z\-]+_[a-zA-Z\-]+#)"
 mnemonicFormat = "#{first}_{second}#"
-nicknamePattern = "([a-zA-Z0-9_\-]+)"
+nicknamePattern = "([a-zA-Z0-9_\-]{1,32})"
 nicknameFormat = "{}"
 fingerprintPattern = "<([a-zA-Z0-9]+)>"
 fingerprintFormat = "<{}>"

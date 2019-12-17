@@ -5,11 +5,22 @@ import hashlib
 from collections import deque
 from weakref import WeakSet
 import time
+import re
 from RSAChat import utils
 from RSAChat import protocol
 from RSAChat import messaging
 
 MAX_CONNECTIONS = 64
+
+
+class RoutingUnit:
+    def __init__(self, key):
+        self.key = key
+        self.queue = deque()
+        self.online = False
+        self.nickname = None
+    
+    pass
 
 
 class RoutingTable(dict):
@@ -23,25 +34,25 @@ class RoutingTable(dict):
     def initialize(self, key):
         if key in self:
             return
-        self[key] = [deque(), False]
+        self[key] = RoutingUnit(key)
     
     def logOn(self, key):
-        self[key][1] = True
+        self[key].online = True
         self._connected += 1
     
     def logOff(self, key):
-        self[key][1] = False
+        self[key].online = False
         self._connected -= 1
     
     def isOnline(self, key):
-        return self[key][1]
+        return self[key].online
     
     def put(self, key, value):
         self.initialize(key)  # ?
-        self[key][0].append(value)
+        self[key].queue.append(value)
     
     def get(self, key, blocking=False):
-        lQueue = self[key][0]
+        lQueue = self[key].queue
         while blocking and len(lQueue) == 0:
             pass
         if len(lQueue) == 0:
@@ -51,11 +62,11 @@ class RoutingTable(dict):
     def getEveryone(self, online=False):
         lRes = self.keys()
         if online:
-            return [i for i in lRes if self.isOnline(i)]
-        return lRes
+            return [self[i] for i in lRes if self.isOnline(i)]
+        return [self[i] for i in lRes]
     
     def len(self, key):
-        return len(self[key][0])  # ?
+        return len(self[key].queue)  # ?
     
     def clear(self, key):
         # ? Delete or make blank?
@@ -166,23 +177,44 @@ class ServerGeneralProtocol(BaseGeneralProtocol):
             #self.log("Server in")
             await asyncio.sleep(0)
             try:
-                lEPacket = protocol.REGULAR_PACKET.receive(self.recv)
+                lEPacket = protocol.REGULAR_EPACKET.receive(self.recv).INNER
             except utils.NotEnoughDataException:
                 continue
             lSPacket = lEPacket.get_EPDATA(self.selfKey)
-            assert lSPacket.get_SPSID() == self.sessionID
-            lRecepient = lSPacket.get_SPKEY()
-            if lRecepient == self.selfKey.getPublicKey():
-                for lMember in self.routingTable.getEveryone(online=True):
-                    lNewSPacket = protocol.SPACKET.build(lSPacket.get_SPDATA(self.selfKey), lMember, self.sessionID)
-                    lNewSPacket.SPKEY = utils.RSA.dumpKey(self.otherPKey, PUB=True).encode()
-                    self.routingTable.put(lMember, lNewSPacket)
-                self.log("[*] Message from:\n{}\nTo: Everyone".format(self.otherPKey.getReprName()))
+            assert lSPacket.verifySession()
+            lSPacket = lSPacket.INNER
+            if isinstance(lSPacket, protocol.MESSAGE_SPACKET):
+                self.handleMessageSPacket(lSPacket)
+            elif isinstance(lSpacket, protocol.LOOKUP_SPACKET):
+                self.handleLookupPacket(lSPacket)
+            elif isinstance(lSPacket, protocol.ONLINE_SPACKET):
+                self.handleOnlinePacket(lSPacket)
             else:
-                lNewSPacket = protocol.SPACKET.copy(lSPacket)
+                assert False
+    
+    def handleMessagePacket(self, packet):
+        lRecepient = packet.get_SPKEY()
+        if lRecepient == self.selfKey.getPublicKey():
+            for lMember in self.routingTable.getEveryone(online=True):
+                lNewSPacket = protocol.SPACKET.build(packet.get_SPDATA(self.selfKey), lMember.key, self.sessionID)
                 lNewSPacket.SPKEY = utils.RSA.dumpKey(self.otherPKey, PUB=True).encode()
-                self.routingTable.put(lRecepient, lNewSPacket)
-                self.log("[*] Message from:\n{}\nTo:\n{}".format(self.otherPKey.getReprName(), lRecepient.getReprName()))
+                self.routingTable.put(lMember.key, lNewSPacket)
+            self.log("[*] Message from:\n{}\nTo: Everyone".format(self.otherPKey.getReprName()))
+        else:
+            lNewSPacket = packet.copy()
+            lNewSPacket.SPKEY = utils.RSA.dumpKey(self.otherPKey, PUB=True).encode()
+            self.routingTable.put(lRecepient, lNewSPacket)
+            self.log("[*] Message from:\n{}\nTo:\n{}".format(self.otherPKey.getReprName(), lRecepient.getReprName()))
+    
+    def handleLookupPacket(self, packet):
+        lTarget = packet.get_SPTARGET()
+        assert re.fullmatch(utils.RSA.nicknamePattern, lTarget)
+        lResults = [i.key for i in self.routingTable.getEveryone(online=True) if i.nickname == lTarget]
+        assert len(lResults) <= 1
+        self.routingTable.put(self.selfKey, protocol.LOOKUP_ANS_SPACKET.build(lResults[0]))
+    
+    def handleOnlinePacket(self, packet):
+        pass
     
     async def background_outgoing(self):
         await self.connected
@@ -193,8 +225,8 @@ class ServerGeneralProtocol(BaseGeneralProtocol):
                 lSPacket = self.routingTable.get(self.otherPKey)
             except utils.NotEnoughDataException:
                 continue
-            lSPacket.SPSID = self.sessionID
-            self.send(protocol.REGULAR_PACKET.build(lSPacket, self.otherPKey).encode())
+            lSPacket = protocol.SPACKET.build(lSPacket, self.sessionID)
+            self.send(protocol.EPACKET.build(protocol.REGULAR_EPACKET.build(lSPacket, self.otherPKey)).encode())
 
     def connection_lost(self, exc=None):
         self.log("[-] Disconnected")
@@ -216,11 +248,13 @@ class ClientGeneralProtocol(BaseGeneralProtocol):
             #self.log("Client in")
             await asyncio.sleep(0)
             try:
-                lEPacket = protocol.REGULAR_PACKET.receive(self.recv)
+                lEPacket = protocol.REGULAR_EPACKET.receive(self.recv).INNER
             except utils.NotEnoughDataException:
                 continue
             lSPacket = lEPacket.get_EPDATA(self.selfKey)
-            assert lSPacket.get_SPSID() == self.sessionID
+            assert lSPacket.verifySession()
+            lSPacket = lSPacket.INNER
+            assert isinstance(lSPacket, protocol.MESSAGE_SPACKET)
             lSender = lSPacket.get_SPKEY()
             lPPacket = lSPacket.get_SPDATA(self.selfKey)
             assert lPPacket.verify(lSender)
@@ -241,8 +275,8 @@ class ClientGeneralProtocol(BaseGeneralProtocol):
             #lRecepient = self.selfKey.getPublicKey()
             #lMsg = messaging.Message(lText, self.selfKey.getPublicKey(), lRecepient)
             lPPacket = lMsg.toPPacket(self.selfKey)
-            lSPacket = protocol.SPACKET.build(lPPacket, lRecepient, self.sessionID)
-            lEPacket = protocol.REGULAR_PACKET.build(lSPacket, self.otherPKey)
+            lSPacket = protocol.SPACKET.build(protocol.MESSAGE_SPACKET.build(lPPacket, lRecepient), self.sessionID)
+            lEPacket = protocol.EPACKET.build(protocol.REGULAR_EPACKET.build(lSPacket, self.otherPKey))
             self.send(lEPacket.encode())
             #self.log("Sending...")
 
