@@ -152,6 +152,12 @@ class Buffer:
         return len(self._buf)
 
 
+def queueGet(queue):
+    if len(queue) == 0:
+        raise NotEnoughDataException()
+    return queue.popleft()
+
+
 def log(*data):
     print(*data)
     flush()

@@ -324,12 +324,14 @@ class MESSAGE_SPACKET(SPACKET_DATA):
 
 class LOOKUP_ASK_SPACKET(SPACKET_DATA):
     id = SPACKET_TYPE.LOOKUP_ASK
-    structure = [("SPTARGET", bytes, -2)]
-    defaultFields = {"SPTARGET": None}
+    structure = [("SPRID", int, 2), ("SPTARGET", bytes, -2)]
+    defaultFields = {"SPRID": None, "SPTARGET": None}
     
     @classmethod
-    def build(cls, target):
-        return cls(SPTARGET=target)
+    def build(cls, rid, target):
+        if isinstance(target, str):
+            target = target.encode()
+        return cls(SPRID=rid, SPTARGET=target)
     
     def get_SPTARGET(self):
         return self.SPTARGET.decode()
@@ -337,32 +339,48 @@ class LOOKUP_ASK_SPACKET(SPACKET_DATA):
 
 class LOOKUP_ANS_SPACKET(SPACKET_DATA):
     id = SPACKET_TYPE.LOOKUP_ANS
-    structure = [("SPKEY", bytes, -2)]
-    defaultFields = {"SPKEY": None}
+    structure = [("SPRID", int, 2), ("SPKEY", bytes, -2)]
+    defaultFields = {"SPRID": None, "SPKEY": None}
     
     @classmethod
-    def build(cls, pKey):
-        return cls(SPKEY=utils.RSA.dumpKey(pKey, PUB=True))
+    def build(cls, rid, pKey):
+        if pKey is not None:
+            pKey = utils.RSA.dumpKey(pKey, PUB=True).encode()
+        else:
+            pKey = b""
+        return cls(SPRID=rid, SPKEY=pKey)
     
     def get_SPKEY(self):
-        return utils.RSA.loadKey(self.SPKEY, PUB=True)
+        if self.SPKEY != b"":
+            return utils.RSA.loadKey(self.SPKEY, PUB=True)
+        else:
+            return None
 
 
 class ONLINE_ASK_SPACKET(SPACKET_DATA):
     id = SPACKET_TYPE.ONLINE_ASK
+    structure = [("SPRID", int, 2)]
+    defaultFields = {"SPRID": None}
+    
+    @classmethod
+    def build(cls, rid):
+        return cls(SPRID=rid)
 
 
 class ONLINE_ANS_SPACKET(SPACKET_DATA):
     id = SPACKET_TYPE.ONLINE_ANS
-    structure = [("SPONLINE", bytes, -2)]
-    defaultFields = {"SPONLINE": None}
+    structure = [("SPRID", int, 2), ("SPONLINE", bytes, -2)]
+    defaultFields = {"SPRID": None, "SPONLINE": None}
     
     @classmethod
-    def build(cls, online):
-        return cls(SPONLINE='\n'.join(online).encode())
+    def build(cls, rid, online):
+        return cls(SPRID=rid, SPONLINE='\n'.join(online).encode())
     
     def get_SPONLINE(self):
-        return self.SPONLINE.decode().split('\n')
+        res = self.SPONLINE.decode()
+        if res == "":
+            return []
+        return res.split("\n")
 
 
 class PPACKET(BasePacket):

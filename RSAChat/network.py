@@ -3,6 +3,7 @@ import socketserver
 import asyncio
 import hashlib
 from collections import deque
+#from queue import Queue
 from weakref import WeakSet
 import time
 import re
@@ -19,8 +20,6 @@ class RoutingUnit:
         self.queue = deque()
         self.online = False
         self.nickname = None
-    
-    pass
 
 
 class RoutingTable(dict):
@@ -72,6 +71,56 @@ class RoutingTable(dict):
         # ? Delete or make blank?
         if key in self:
             del self[key]
+
+
+class ResponseData:
+    def __init__(self, type):
+        self.finished = False
+        self.type = type
+        self.value = None
+    
+    def respond(self, value):
+        self.value = value
+        self.finished = True
+
+
+class ResponseContainer(dict):
+    def request(self, type, respId=None):
+        if respId is None:
+            respId = self.allocateRespId(blocking=True)
+        if respId in self:
+            assert False
+        self[respId] = ResponseData(type)
+        return respId
+    
+    def respond(self, respId, value):
+        self[respId].respond(value)
+    
+    def awaits(self, respId):
+        return respId in self and not self[respId].finished
+    
+    def finished(self, respId):
+        return self[respId].finished
+    
+    def getResponse(self, respId, blocking=False):
+        while blocking and not self[respId].finished:
+            pass
+        if not self[respId].finished:
+            raise utils.NotEnoughDataException()
+        return self[respId].value
+    
+    def allocateRespId(self, blocking=False):
+        while blocking and len(self.keys()) > 65535:
+            pass
+        lIds = set(self.keys())
+        for i in range(65536):
+            if i not in lIds:
+                return i
+        raise utils.NotEnoughDataException()
+    
+    def clear(self, respId):
+        if respId in self:
+            del self[respId]
 
 
 class ServerInitialHandler(socketserver.StreamRequestHandler):
@@ -185,9 +234,9 @@ class ServerGeneralProtocol(BaseGeneralProtocol):
             lSPacket = lSPacket.INNER
             if isinstance(lSPacket, protocol.MESSAGE_SPACKET):
                 self.handleMessagePacket(lSPacket)
-            elif isinstance(lSpacket, protocol.LOOKUP_SPACKET):
+            elif isinstance(lSPacket, protocol.LOOKUP_ASK_SPACKET):
                 self.handleLookupPacket(lSPacket)
-            elif isinstance(lSPacket, protocol.ONLINE_SPACKET):
+            elif isinstance(lSPacket, protocol.ONLINE_ASK_SPACKET):
                 self.handleOnlinePacket(lSPacket)
             else:
                 assert False
@@ -210,11 +259,15 @@ class ServerGeneralProtocol(BaseGeneralProtocol):
         lTarget = packet.get_SPTARGET()
         assert re.fullmatch(utils.RSA.nicknamePattern, lTarget)
         lResults = [i.key for i in self.routingTable.getEveryone(online=True) if i.nickname == lTarget]
-        assert len(lResults) <= 1
-        self.routingTable.put(self.selfKey, protocol.LOOKUP_ANS_SPACKET.build(lResults[0]))
+        if len(lResults) == 0:
+            lResults = [None]
+        assert len(lResults) == 1
+        self.routingTable.put(self.otherPKey, protocol.LOOKUP_ANS_SPACKET.build(packet.SPRID, lResults[0]))
     
     def handleOnlinePacket(self, packet):
-        pass
+        # TODO: !Prevent overflows!
+        lResults = [str(i.nickname) for i in self.routingTable.getEveryone(online=True) if i.nickname is not None]
+        self.routingTable.put(self.otherPKey, protocol.ONLINE_ANS_SPACKET.build(packet.SPRID, lResults))
     
     async def background_outgoing(self):
         await self.connected
@@ -237,9 +290,10 @@ class ServerGeneralProtocol(BaseGeneralProtocol):
 class ClientGeneralProtocol(BaseGeneralProtocol):
     def connection_made(self, transport):
         self.log("Connected to {0[0]}:{0[1]}".format(transport._sock.getpeername()))
-        self.console = messaging.start_console()
+        self.console = messaging.start_console(self)
         self.console.setIdentity(self.selfKey.getPublicKey())
-        self.console.tmp(self.otherPKey)
+        self.respContainer = ResponseContainer()
+        self.outgoingQueue = deque()
         super().connection_made(transport)
     
     async def background_incoming(self):
@@ -254,12 +308,31 @@ class ClientGeneralProtocol(BaseGeneralProtocol):
             lSPacket = lEPacket.get_EPDATA(self.selfKey)
             assert lSPacket.verifySession(self.sessionID)
             lSPacket = lSPacket.INNER
-            assert isinstance(lSPacket, protocol.MESSAGE_SPACKET)
-            lSender = lSPacket.get_SPKEY()
-            lPPacket = lSPacket.get_SPDATA(self.selfKey)
-            assert lPPacket.verify(lSender)
-            lMessage = messaging.Message.fromPPacket(lPPacket, lSender, self.selfKey.getPublicKey())
-            self.console.addIncoming(lMessage)
+            if isinstance(lSPacket, protocol.MESSAGE_SPACKET):
+                self.handleMessagePacket(lSPacket)
+            elif isinstance(lSPacket, protocol.LOOKUP_ANS_SPACKET):
+                self.handleLookupPacket(lSPacket)
+            elif isinstance(lSPacket, protocol.ONLINE_ANS_SPACKET):
+                self.handleOnlinePacket(lSPacket)
+            else:
+                assert False
+    
+    def handleMessagePacket(self, packet):
+        lSender = packet.get_SPKEY()
+        lPPacket = packet.get_SPDATA(self.selfKey)
+        assert lPPacket.verify(lSender)
+        lMessage = messaging.Message.fromPPacket(lPPacket, lSender, self.selfKey.getPublicKey())
+        self.console.addIncoming(lMessage)
+    
+    def handleLookupPacket(self, packet):
+        assert self.respContainer.awaits(packet.SPRID)
+        assert self.respContainer[packet.SPRID].type == "LOOKUP"
+        self.respContainer.respond(packet.SPRID, packet.get_SPKEY())
+    
+    def handleOnlinePacket(self, packet):
+        assert self.respContainer.awaits(packet.SPRID)
+        assert self.respContainer[packet.SPRID].type == "ONLINE"
+        self.respContainer.respond(packet.SPRID, packet.get_SPONLINE())
     
     async def background_outgoing(self):
         await self.connected
@@ -267,19 +340,41 @@ class ClientGeneralProtocol(BaseGeneralProtocol):
             #self.log("Client out")
             await asyncio.sleep(0)
             try:
-                lMsg = self.console.getOutgoing()
-                lRecepient = lMsg.recepient
+                lSPacket = utils.queueGet(self.outgoingQueue)
             except utils.NotEnoughDataException:
                 continue
             #lText = "My name is Yoshikage Kira. I'm 33 years old. My house is in the northeast section of Morioh, where all the villas are, and I am not married. I work as an employee for the Kame Yu department stores, and I get home every day by 8 PM at the latest. I don't smoke, but I ocassionaly drink. I'm in bed by 11 PM, and make sure I get eight hours of sleep, no matter what. After having a glass of warm milk and doing about twenty minutes of stretches before going to bed, I usually have no problems sleeping until morning. Just like a baby, I wake up without any fatigue or stress in the morning. I was told there were no issues at my last check-up. I'm trying to explain that I'm a person who wishes to live a very quiet life. I take care not to trouble myself with any enemies, like winning and losing, that would cause me to lose sleep at night. That is how I deal with society, and I know that is what brings me happiness. Althought, if I were to fight I wouldn't lose to anyone."
             #lRecepient = self.selfKey.getPublicKey()
             #lMsg = messaging.Message(lText, self.selfKey.getPublicKey(), lRecepient)
-            lPPacket = lMsg.toPPacket(self.selfKey)
-            lSPacket = protocol.SPACKET.build(protocol.MESSAGE_SPACKET.build(lPPacket, lRecepient), self.sessionID)
+            lSPacket = protocol.SPACKET.build(lSPacket, self.sessionID)
             lEPacket = protocol.EPACKET.build(protocol.REGULAR_EPACKET.build(lSPacket, self.otherPKey))
             self.send(lEPacket.encode())
             #self.log("Sending...")
-
+    
+    def queueSend(self, packet):
+        self.outgoingQueue.append(packet)
+    
+    def sendMessage(self, msg):
+        if msg.recepient is None:
+            msg.recepient = self.otherPKey
+        lPPacket = msg.toPPacket(self.selfKey)
+        lSPacket = protocol.MESSAGE_SPACKET.build(lPPacket, msg.recepient)
+        self.queueSend(lSPacket)
+    
+    def sendLookup(self, target):
+        respId = self.respContainer.request("LOOKUP")
+        lSPacket = protocol.LOOKUP_ASK_SPACKET.build(respId, target)
+        self.queueSend(lSPacket)
+        lPKey = self.respContainer.getResponse(respId, blocking=True)
+        return lPKey
+    
+    def sendOnline(self):
+        respId = self.respContainer.request("ONLINE")
+        lSPacket = protocol.ONLINE_ASK_SPACKET.build(respId)
+        self.queueSend(lSPacket)
+        lOnline = self.respContainer.getResponse(respId, blocking=True)
+        return lOnline
+    
     def connection_lost(self, exc=None):
         self.log("Disconnect")
         super().connection_lost(exc=exc)

@@ -186,7 +186,7 @@ class Console(cmd.Cmd):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.state = ""
-        self.prompting = False
+        self.prompting = True
         self.aliases = {}
         self.commands = set()
         self.legitCommands = set()
