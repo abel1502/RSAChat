@@ -1,6 +1,6 @@
 import time
 from collections import deque
-import cmd
+import re
 from RSAChat import utils
 from RSAChat.utils.console import *
 from RSAChat import protocol
@@ -78,6 +78,8 @@ class MessagingConsole(Console):
         lTo = input("To: ").strip()
         if lTo in ("*", ""):
             lTo = None
+        elif re.fullmatch(utils.RSA.nicknamePattern, lTo):
+            lTo = utils.RSA.loadKey(self.networkClient.sendLookup(lTo), PUB=True)
         else:
             lTo = utils.RSA.loadKey(lTo, PUB=True)
         lText = input("Body:\n")

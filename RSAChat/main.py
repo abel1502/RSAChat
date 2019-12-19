@@ -14,8 +14,9 @@ def serverMain():
 def clientMain():
     priv = utils.RSA.loadKey("#PRIV#BNGbE0h9qCE8XY2BLCCbpIbnFOm3HgnMvA6SPoJkbo8KIeBRwb+Wr146rbMtyOKDaaHXPg99yAe+Dd4t91zdEDNU7DGXIsSpvT1TDaM59LyuP5hTdi7gFUlTpph/VhNrsxkdkVAlppBW4AV88M0C8WQpS/8ykj36c65RcND9h7ED#AQAB#BC0EXxSN2BpdLpFG5E+psU06ibPzfTNu2XUjJMpocCrC1BKJpwX5diWJYieJQLGSwgJ+/Yf9L1AOUgQ8/0TZSYDecwrrqEN78Nmcwx25ZGTBnNq/s76vVk0bt6Sg8QjF66dox3V7AU9bLpAdqhjrRRTIAL0UrQGSLBERUF+WDuSR#", PRIV=True)
     #priv = utils.RSA.genKeyPair(1024)[1]
-    utils.logIdentity(priv)
-    network.connect_client("localhost", aClientKey=priv)
+    nickname = "Abel"
+    utils.logIdentity(priv, nickname=nickname)
+    network.connect_client("localhost", aClientKey=priv, aNickname=nickname)
 
 
 def main():

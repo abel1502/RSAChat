@@ -1,10 +1,9 @@
-# TODO: verify tons of stuff!!
-
 import hashlib
 import struct
+import re
 from RSAChat import utils
 
-VERSION = 3
+VERSION = 4
 MIN_KEY_LEN = 1023
 
 
@@ -145,6 +144,7 @@ class EPACKET_TYPE:
     HSH_VER_ASK = 4
     HSH_VER_ANS = 5
     HSH_SID = 6
+    HSH_NICKNAME = 7
 
 
 class EPACKET_DATA(PacketData):
@@ -247,7 +247,7 @@ class HSH_VER_ANS_EPACKET(EPACKET_DATA):
 
 class HSH_SID_EPACKET(EPACKET_DATA):
     id = EPACKET_TYPE.HSH_SID
-    structure = [("SID", bytes, -3)]
+    structure = [("SID", bytes, -2)]
     defaultFields = {"SID": None}
     
     @classmethod
@@ -258,6 +258,25 @@ class HSH_SID_EPACKET(EPACKET_DATA):
     def get_SID(self, selfKey):
         selfKey = utils.RSA.loadKey(selfKey, PRIV=True)
         return selfKey.decrypt(self.SID)
+
+
+class HSH_NICKNAME_EPACKET(EPACKET_DATA):
+    id = EPACKET_TYPE.HSH_NICKNAME
+    structure = [("NICKNAME", bytes, -2)]
+    defaultFields = {"NICKNAME": None}
+    
+    @classmethod
+    def build(cls, nickname, otherPKey):
+        otherPKey = utils.RSA.loadKey(otherPKey, PUB=True)
+        if nickname is None:
+            nickname = b""
+        if isinstance(nickname, str):
+            nickname = nickname.encode()
+        return cls(NICKNAME=otherPKey.encrypt(nickname))
+    
+    def get_NICKNAME(self, selfKey):
+        selfKey = utils.RSA.loadKey(selfKey, PRIV=True)
+        return selfKey.decrypt(self.NICKNAME).decode()
 
 
 class REGULAR_EPACKET(EPACKET_DATA):
@@ -281,6 +300,7 @@ class SPACKET_TYPE:
     LOOKUP_ANS = 2
     ONLINE_ASK = 3
     ONLINE_ANS = 4
+    NICKNAME = 5
 
 
 class SPACKET_DATA(PacketData):
@@ -446,7 +466,12 @@ class ServerHandshakeProtocol(BaseBlockingProtocol):
         
         lSessionID = hashlib.md5(utils.randomBytes(16)).digest()
         self.send(EPACKET.build(HSH_SID_EPACKET.build(lSessionID, lClientPKey)).encode())
-        return lClientPKey, lSessionID
+        
+        lCurPacket = HSH_NICKNAME_EPACKET.receive(self.recv).INNER
+        lNickname = lCurPacket.get_NICKNAME(self.serverKey)
+        assert re.fullmatch(utils.RSA.nicknamePattern, lNickname)
+        
+        return lClientPKey, lNickname, lSessionID
 
 
 class ClientHandshakeProtocol(BaseBlockingProtocol):
@@ -454,7 +479,7 @@ class ClientHandshakeProtocol(BaseBlockingProtocol):
         super().__init__(sender, receiver)
         self.clientKey = aClientKey
     
-    def execute(self, aServerPKey=None):
+    def execute(self, aServerPKey=None, aNickname=None):
         self.send(V_INF_PACKET.build().encode())
         lStage0Packet = V_INF_PACKET.receive(self.recv)
         if lStage0Packet.isOverloaded():
@@ -477,4 +502,8 @@ class ClientHandshakeProtocol(BaseBlockingProtocol):
         
         lCurPacket = HSH_SID_EPACKET.receive(self.recv).INNER
         lSessionID = lCurPacket.get_SID(self.clientKey)
+        assert len(lSessionID) == 16
+        
+        self.send(EPACKET.build(HSH_NICKNAME_EPACKET.build(aNickname, lServerPKey)).encode())
+        
         return lServerPKey, lSessionID

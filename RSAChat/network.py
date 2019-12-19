@@ -15,11 +15,11 @@ MAX_CONNECTIONS = 64
 
 
 class RoutingUnit:
-    def __init__(self, key):
+    def __init__(self, key, nickname=None):
         self.key = key
         self.queue = deque()
         self.online = False
-        self.nickname = None
+        self.nickname = nickname
 
 
 class RoutingTable(dict):
@@ -30,10 +30,10 @@ class RoutingTable(dict):
     def getConnected(self):
         return self._connected
     
-    def initialize(self, key):
+    def initialize(self, key, nickname=None):
         if key in self:
             return
-        self[key] = RoutingUnit(key)
+        self[key] = RoutingUnit(key, nickname=nickname)
     
     def logOn(self, key):
         self[key].online = True
@@ -147,11 +147,11 @@ class ServerInitialHandler(socketserver.StreamRequestHandler):
         # TODO: Timeout and check for shutdown?
         
         lHshP = protocol.ServerHandshakeProtocol(self.send, self.recv, self.serverKey)
-        lClientPKey, lSessionID = lHshP.execute(overloaded=self.isOverloaded())
+        lClientPKey, lClientNickname, lSessionID = lHshP.execute(overloaded=self.isOverloaded())
         self.activeConnections.add(self.request)
         
         lLoop = asyncio.new_event_loop() # ?
-        lTransport, lServerGeneralProtocol = lLoop.run_until_complete(lLoop.connect_accepted_socket(lambda *args, **kwargs: ServerGeneralProtocol(self.routingTable, lLoop, self.serverKey, lClientPKey, lSessionID, *args, **kwargs), self.request))
+        lTransport, lServerGeneralProtocol = lLoop.run_until_complete(lLoop.connect_accepted_socket(lambda *args, **kwargs: ServerGeneralProtocol(self.routingTable, lLoop, self.serverKey, lClientPKey, lClientNickname, lSessionID, *args, **kwargs), self.request))
         try:
             lLoop.run_until_complete(lServerGeneralProtocol.disconnected)
         except KeyboardInterrupt:
@@ -165,9 +165,10 @@ class BaseGeneralProtocol(asyncio.Protocol):
     logWithSID = False
     sessionFlair = "[{}]"
     
-    def __init__(self, aLoop, aSelfKey, aOtherPKey, aSessionID, *args, **kwargs):
+    def __init__(self, aLoop, aSelfKey, aOtherPKey, aNickname, aSessionID, *args, **kwargs):
         self.selfKey = aSelfKey
         self.otherPKey = aOtherPKey
+        self.nickname = aNickname
         self.sessionID = aSessionID
         # ? Got to be awaited/executed in loop
         asyncio.gather(*[self.__getattribute__(i)() for i in dir(self) if i.startswith("background_")], loop=aLoop)
@@ -209,11 +210,11 @@ class ServerGeneralProtocol(BaseGeneralProtocol):
     logWithSID = True
     sessionFlair = utils.ColorProvider.getInstance().wrap("[{}]", 96)
     
-    def __init__(self, aRoutingTable, aLoop, aSelfKey, aOtherPKey, aSessionID, *args, **kwargs):
+    def __init__(self, aRoutingTable, aLoop, aSelfKey, aOtherPKey, aNickname, aSessionID, *args, **kwargs):
         self.routingTable = aRoutingTable
-        self.routingTable.initialize(aOtherPKey)
+        self.routingTable.initialize(aOtherPKey, nickname=aNickname)
         assert not self.routingTable.isOnline(aOtherPKey)
-        super().__init__(aLoop, aSelfKey, aOtherPKey, aSessionID, *args, **kwargs)
+        super().__init__(aLoop, aSelfKey, aOtherPKey, aNickname, aSessionID, *args, **kwargs)
     
     def connection_made(self, transport):
         self.log("[+] Identified {}".format(self.otherPKey.getReprName()))
@@ -389,7 +390,7 @@ def start_server(host="", port=8887, aServerKey=None):
     serv.close()  # ?
 
 
-def connect_client(host, port=8887, aClientKey=None, aServerPKey=None):    
+def connect_client(host, port=8887, aClientKey=None, aServerPKey=None, aNickname=None):    
     lClientKey = utils.RSA.loadKey(aClientKey, PRIV=True) if aClientKey is not None else RSA.genKeyPair()[1]
     lClientSocket = socket.create_connection((host, port))
     
@@ -403,10 +404,10 @@ def connect_client(host, port=8887, aClientKey=None, aServerPKey=None):
         lClientSocket.sendall(data)
     
     lHshP = protocol.ClientHandshakeProtocol(_send, _recv, aClientKey)  # ?
-    lServerPKey, lSessionID = lHshP.execute(aServerPKey)
+    lServerPKey, lSessionID = lHshP.execute(aServerPKey=aServerPKey, aNickname=aNickname)
     
     lLoop = asyncio.get_event_loop() # ?
-    lTransport, lClientGeneralProtocol = lLoop.run_until_complete(lLoop.create_connection(lambda *args, **kwargs: ClientGeneralProtocol(lLoop, lClientKey, lServerPKey, lSessionID, *args, **kwargs), sock=lClientSocket))
+    lTransport, lClientGeneralProtocol = lLoop.run_until_complete(lLoop.create_connection(lambda *args, **kwargs: ClientGeneralProtocol(lLoop, lClientKey, lServerPKey, aNickname, lSessionID, *args, **kwargs), sock=lClientSocket))
     try:
         lLoop.run_until_complete(lClientGeneralProtocol.disconnected)
     except KeyboardInterrupt:

@@ -167,9 +167,11 @@ def flush():
     sys.stdout.flush()
 
 
-def logIdentity(key):
+def logIdentity(key, nickname=None):
     key = RSA.loadKey(key, PRIV=True)
-    log("Your identity:\n{priv}\n{pub}\n\n{nick}\n".format(priv=key.dump(), pub=key.getPublicKey().dump(), nick=key.getPublicKey().getReprName()))
+    if nickname is None:
+        nickname = key.getPublicKey().getReprName()
+    log("Your identity:\n{priv}\n{pub}\n{nick}\n".format(priv=key.dump(), pub=key.getPublicKey().dump(), nick=nickname))
 
 
 def exit():
